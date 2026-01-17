@@ -19,7 +19,7 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [settings, setSettings] = useState<AudiobookSettings>({
     voice: BOOK_PROFILES[0].defaultVoice,
-    speed: 0.95,
+    speed: 1.0, // Defaulting to normal speed
     paragraphPause: 2.0
   });
 
@@ -36,6 +36,7 @@ function App() {
     const book = BOOK_PROFILES.find(b => b.id === bookId);
     if (book) {
       setActiveBook(book);
+      // We update the voice to match the book theme, but we keep the user's selected speed
       setSettings(prev => ({ ...prev, voice: book.defaultVoice }));
     }
   };
@@ -64,7 +65,7 @@ function App() {
       setInputText('');
     } catch (err) {
       console.error(err);
-      alert("Error synthesizing speech.");
+      alert("Error synthesizing speech. Ensure your API Key is valid.");
     } finally {
       setIsSynthesizing(false);
     }
@@ -98,7 +99,7 @@ function App() {
     const url = URL.createObjectURL(wavBlob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `${activeBook.title.replace(/\s+/g, '_')}_Take_${new Date(chunk.timestamp).getTime()}.wav`;
+    anchor.download = `Audio_Take_${new Date(chunk.timestamp).getTime()}.wav`;
     anchor.click();
     URL.revokeObjectURL(url);
   };
@@ -112,11 +113,11 @@ function App() {
             {activeBook.title[0]}
           </div>
           <div>
-            <h1 className="text-xl font-bold tracking-tight">Wisdom Studio</h1>
+            <h1 className="text-xl font-bold tracking-tight">Text to Speech Studio</h1>
             <div className="flex items-center gap-2">
                <BookIcon />
                <select 
-                  className="bg-transparent border-none text-sm font-semibold uppercase tracking-widest focus:ring-0 cursor-pointer"
+                  className="bg-transparent border-none text-sm font-semibold uppercase tracking-widest focus:ring-0 cursor-pointer outline-none"
                   style={{ color: activeBook.themeColor }}
                   value={activeBook.id}
                   onChange={(e) => handleBookChange(e.target.value)}
@@ -133,12 +134,12 @@ function App() {
         <section className="flex-1 p-6 flex flex-col gap-6">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 flex-1 flex flex-col min-h-[450px]">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-serif italic text-gray-800">Recording Script</h2>
-              <span className="text-sm text-gray-400 font-mono">{inputText.length} chars</span>
+              <h2 className="text-lg font-serif italic text-gray-800">Manuscript Script</h2>
+              <span className="text-sm text-gray-400 font-mono">{inputText.length} characters</span>
             </div>
             <textarea
               className="flex-1 w-full bg-transparent resize-none focus:outline-none text-xl leading-relaxed placeholder:italic placeholder:text-gray-300 font-serif"
-              placeholder="Paste text here to narrate..."
+              placeholder="Paste the text you want narrated here..."
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
             />
@@ -148,7 +149,7 @@ function App() {
                  <div className="flex flex-col gap-1">
                     <label className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Narrator Voice</label>
                     <select 
-                        className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-opacity-50 outline-none"
+                        className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-opacity-50 outline-none cursor-pointer"
                         value={settings.voice}
                         onChange={(e) => setSettings({...settings, voice: e.target.value as VoiceName})}
                     >
@@ -161,9 +162,12 @@ function App() {
                  <div className="flex flex-col gap-1">
                     <label className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Speed Multiplier</label>
                     <select 
-                        className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-opacity-50 outline-none"
-                        value={settings.speed}
-                        onChange={(e) => setSettings({...settings, speed: parseFloat(e.target.value)})}
+                        className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-opacity-50 outline-none cursor-pointer"
+                        value={settings.speed.toString()}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          setSettings(prev => ({...prev, speed: val}));
+                        }}
                     >
                         <option value="0.8">0.8x (Very Slow)</option>
                         <option value="0.95">0.95x (Reflective)</option>
@@ -193,8 +197,8 @@ function App() {
         {/* Chunks Sidebar */}
         <aside className="w-full lg:w-[450px] p-6 lg:border-l border-gray-200 flex flex-col gap-4 bg-white/50 backdrop-blur-md">
           <div className="flex items-center justify-between">
-            <h3 className="font-bold text-gray-500 uppercase tracking-widest text-xs">Project Master Takes</h3>
-            <span className="bg-gray-200 text-gray-600 text-[10px] px-2 py-1 rounded-full font-bold">{chunks.length} SAVED</span>
+            <h3 className="font-bold text-gray-500 uppercase tracking-widest text-xs tracking-tighter">Generated Master Takes</h3>
+            <span className="bg-gray-200 text-gray-600 text-[10px] px-2 py-1 rounded-full font-bold uppercase">{chunks.length} Saved</span>
           </div>
           
           <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-4 custom-scrollbar">
@@ -246,17 +250,17 @@ function App() {
                     <PauseIcon />
                     <span className="text-sm font-bold uppercase tracking-widest">Master Playback Active</span>
                 </div>
-                <button onClick={stopAudio} className="text-xs font-bold bg-white/20 px-4 py-2 rounded-lg hover:bg-white/30">STOP</button>
+                <button onClick={stopAudio} className="text-xs font-bold bg-white/20 px-4 py-2 rounded-lg hover:bg-white/30 transition-colors">STOP</button>
             </div>
           )}
         </aside>
       </main>
 
       <footer className="bg-white border-t border-gray-200 px-6 py-6 flex justify-between items-center text-gray-400">
-        <p className="text-[11px] font-medium">
-          Powered by Gemini 2.5 Flash Native Audio • {activeBook.title} Project
+        <p className="text-[11px] font-bold uppercase tracking-wide">
+          Kev Sila Text to Speech Audio Generator
         </p>
-        <p className="text-[11px] font-bold">WAV High-Fidelity Export Enabled</p>
+        <p className="text-[11px] font-bold text-gray-300 uppercase">WAV High-Fidelity Export Enabled</p>
       </footer>
     </div>
   );
