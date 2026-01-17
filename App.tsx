@@ -10,6 +10,7 @@ const PauseIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" heigh
 const DownloadIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
 const TrashIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>;
 const BookIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>;
+const InfoIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>;
 
 function App() {
   const [activeBook, setActiveBook] = useState<BookProfile>(BOOK_PROFILES[0]);
@@ -18,7 +19,6 @@ function App() {
   const [isSynthesizing, setIsSynthesizing] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   
-  // Speed is kept as a string for exact dropdown matching
   const [settings, setSettings] = useState<AudiobookSettings>({
     voice: BOOK_PROFILES[0].defaultVoice,
     speed: 1.0, 
@@ -38,7 +38,6 @@ function App() {
     const book = BOOK_PROFILES.find(b => b.id === bookId);
     if (book) {
       setActiveBook(book);
-      // Keep user speed, only update voice to book default
       setSettings(prev => ({ ...prev, voice: book.defaultVoice }));
     }
   };
@@ -106,8 +105,15 @@ function App() {
     URL.revokeObjectURL(url);
   };
 
-  // Helper for matching select values to numbers
-  const speedString = settings.speed === 1 ? "1" : settings.speed.toString();
+  // Convert number to consistent string for dropdown stability
+  const getSpeedValue = (speed: number) => {
+    if (speed === 1) return "1.0";
+    if (speed === 0.8) return "0.8";
+    if (speed === 0.95) return "0.95";
+    if (speed === 1.2) return "1.2";
+    if (speed === 1.5) return "1.5";
+    return speed.toString();
+  };
 
   return (
     <div className="min-h-screen text-[#2c2c2c] flex flex-col transition-colors duration-500" style={{ backgroundColor: activeBook.accentColor }}>
@@ -141,13 +147,12 @@ function App() {
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-serif italic text-gray-800">Manuscript Script</h2>
               <div className="flex gap-4 items-center">
-                 <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-1 rounded-md font-bold uppercase tracking-tighter">Tip: Use # for Titles & • for Bullets</span>
-                 <span className="text-sm text-gray-400 font-mono">{inputText.length} chars</span>
+                 <span className="text-sm text-gray-400 font-mono">{inputText.length} characters</span>
               </div>
             </div>
             <textarea
               className="flex-1 w-full bg-transparent resize-none focus:outline-none text-xl leading-relaxed placeholder:italic placeholder:text-gray-200 font-serif"
-              placeholder={`Example structural markers:\n\n# Chapter One: The Beginning\n## An Introduction to Solitude\n\n• The digital age brings noise.\n• Silence is a rare luxury.\n\nRegular paragraphs will have a 2-second pause.`}
+              placeholder={`Write your script here using structural markers for professional results...`}
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
             />
@@ -171,7 +176,7 @@ function App() {
                     <label className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Speed Multiplier</label>
                     <select 
                         className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-opacity-50 outline-none cursor-pointer"
-                        value={speedString}
+                        value={getSpeedValue(settings.speed)}
                         onChange={(e) => {
                           const val = parseFloat(e.target.value);
                           setSettings(prev => ({...prev, speed: val}));
@@ -179,7 +184,7 @@ function App() {
                     >
                         <option value="0.8">0.8x (Very Slow)</option>
                         <option value="0.95">0.95x (Reflective)</option>
-                        <option value="1">1.0x (Normal)</option>
+                        <option value="1.0">1.0x (Normal)</option>
                         <option value="1.2">1.2x (Conversational)</option>
                         <option value="1.5">1.5x (Fast Pace)</option>
                     </select>
@@ -203,16 +208,51 @@ function App() {
         </section>
 
         {/* Chunks Sidebar */}
-        <aside className="w-full lg:w-[450px] p-6 lg:border-l border-gray-200 flex flex-col gap-4 bg-white/50 backdrop-blur-md">
-          <div className="flex items-center justify-between">
-            <h3 className="font-bold text-gray-500 uppercase tracking-widest text-xs tracking-tighter">Master Takes</h3>
+        <aside className="w-full lg:w-[450px] p-6 lg:border-l border-gray-200 flex flex-col gap-6 bg-white/50 backdrop-blur-md">
+          
+          {/* Structural Reference Guide */}
+          <div className="bg-white/80 p-5 rounded-2xl border border-gray-200 shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="text-blue-500"><InfoIcon /></div>
+              <h3 className="font-bold text-gray-700 uppercase tracking-widest text-[10px]">Studio Reference Guide</h3>
+            </div>
+            <div className="space-y-3">
+              <div className="flex items-start gap-3">
+                <span className="font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-xs font-bold">#</span>
+                <div>
+                  <p className="text-[11px] font-bold text-gray-800">Main Title</p>
+                  <p className="text-[10px] text-gray-500">Authoritative focus + 2.5s pause</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-xs font-bold">##</span>
+                <div>
+                  <p className="text-[11px] font-bold text-gray-800">Subtitle</p>
+                  <p className="text-[10px] text-gray-500">Steady emphasis + 2s pause</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-xs font-bold">•</span>
+                <div>
+                  <p className="text-[11px] font-bold text-gray-800">Bullet Points</p>
+                  <p className="text-[10px] text-gray-500">List cadence + 1.2s gap</p>
+                </div>
+              </div>
+              <div className="pt-2 border-t border-gray-50 text-[10px] italic text-gray-400">
+                Standard paragraphs use a 2s reflection pause.
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between border-t border-gray-100 pt-4">
+            <h3 className="font-bold text-gray-500 uppercase tracking-widest text-xs">Master Takes</h3>
             <span className="bg-gray-200 text-gray-600 text-[10px] px-2 py-1 rounded-full font-bold uppercase">{chunks.length} Saved</span>
           </div>
           
           <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-4 custom-scrollbar">
             {chunks.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-24 text-gray-400 opacity-40 border-2 border-dashed border-gray-300 rounded-3xl text-center px-6">
-                <p className="text-sm italic">Generate high-fidelity audio takes to build your audiobook project here.</p>
+              <div className="flex flex-col items-center justify-center py-16 text-gray-400 opacity-40 border-2 border-dashed border-gray-200 rounded-3xl text-center px-6">
+                <p className="text-sm italic">Generate audio takes to build your audiobook project here.</p>
               </div>
             ) : (
               chunks.map((chunk) => (
@@ -266,7 +306,7 @@ function App() {
 
       <footer className="bg-white border-t border-gray-200 px-6 py-6 flex justify-between items-center text-gray-400">
         <p className="text-[11px] font-bold uppercase tracking-wide leading-tight">
-          Kev Sia Text to Speech Audio Generator from '' Solitude In The Digital Age Project''
+          Kev Sila Text to Speech Audio Generator from '' Solitude In The Digital Age Project''
         </p>
         <p className="text-[11px] font-bold text-gray-300 uppercase shrink-0 ml-4">WAV Export Enabled</p>
       </footer>
