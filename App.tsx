@@ -11,7 +11,6 @@ const TrashIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" heigh
 const VolumeIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>;
 const SettingsIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1-2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>;
 const ActivityIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>;
-const InfoIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>;
 const MailIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>;
 const WhatsAppIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 1 1-7.6-10.4 8.38 8.38 0 0 1 3.8.9L21 4.25z"/></svg>;
 
@@ -58,7 +57,7 @@ function App() {
   const currentWordCount = useMemo(() => inputText.trim() === '' ? 0 : inputText.trim().split(/\s+/).length, [inputText]);
 
   useEffect(() => {
-    const savedUsage = localStorage.getItem('studio_usage_v4.7');
+    const savedUsage = localStorage.getItem('studio_usage_v4.8');
     if (savedUsage) {
       const parsed = JSON.parse(savedUsage);
       if (parsed.lastResetDate !== new Date().toLocaleDateString()) {
@@ -80,17 +79,32 @@ function App() {
     }
   }, []);
 
-  const handleSynthesize = async () => {
-    if (!inputText.trim() || !ttsRef.current) return;
-    
-    const currentLimit = LIMITS[settings.platform];
-    const currentUsage = settings.platform === Platform.GEMINI ? usage.geminiRequests :
-                         settings.platform === Platform.ELEVEN_LABS ? usage.elevenLabsRequests :
+  // Helper to check and increment quota
+  const checkAndIncrementQuota = (platform: Platform) => {
+    const currentLimit = LIMITS[platform];
+    const currentUsage = platform === Platform.GEMINI ? usage.geminiRequests :
+                         platform === Platform.ELEVEN_LABS ? usage.elevenLabsRequests :
                          usage.notebookRequests;
 
     if (currentUsage >= currentLimit) {
-      alert(`${settings.platform.replace('_', ' ')} daily quota limit reached.`); return;
+      alert(`[Studio Limit] Your ${platform.replace('_', ' ')} daily session quota is full.`);
+      return false;
     }
+
+    const nextUsage = { ...usage };
+    if (platform === Platform.GEMINI) nextUsage.geminiRequests += 1;
+    if (platform === Platform.ELEVEN_LABS) nextUsage.elevenLabsRequests += 1;
+    if (platform === Platform.NOTEBOOK_LM) nextUsage.notebookRequests += 1;
+    
+    setUsage(nextUsage);
+    localStorage.setItem('studio_usage_v4.8', JSON.stringify(nextUsage));
+    return true;
+  };
+
+  const handleSynthesize = async () => {
+    if (!inputText.trim() || !ttsRef.current) return;
+    
+    if (!checkAndIncrementQuota(settings.platform)) return;
 
     setIsSynthesizing(true);
     try {
@@ -116,20 +130,16 @@ function App() {
       };
 
       setChunks(prev => [newChunk, ...prev]);
-      setUsage(prev => {
-        const next = { ...prev };
-        if (settings.platform === Platform.GEMINI) next.geminiRequests += 1;
-        if (settings.platform === Platform.ELEVEN_LABS) next.elevenLabsRequests += 1;
-        if (settings.platform === Platform.NOTEBOOK_LM) next.notebookRequests += 1;
-        localStorage.setItem('studio_usage_v4.7', JSON.stringify(next));
-        return next;
-      });
       setInputText('');
       const nextPartNum = parseInt(metadata.part) + 1;
       setMetadata(prev => ({ ...prev, part: nextPartNum.toString().padStart(2, '0') }));
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Recording failed. Please check your connection.");
+      if (err.message?.includes('quota') || err.status === 429) {
+        alert("CRITICAL: Gemini API Provider Quota Exceeded. The backend server is currently overloaded or you have hit your API key's hard limit. Please wait a few minutes before trying another take.");
+      } else {
+        alert("Recording failed. Check your API key and network connection.");
+      }
     } finally {
       setIsSynthesizing(false);
     }
@@ -298,13 +308,13 @@ function App() {
                <div className="grid md:grid-cols-2 gap-12 text-[13px] leading-relaxed text-gray-500">
                   <div className="space-y-5">
                     <p className="font-black text-gray-900 uppercase text-[11px] tracking-widest">Universal Production Suite</p>
-                    <p>Welcome to the Kev Sila TTS Studio—a professional-grade workstation designed to transform complex manuscripts into high-fidelity audio. This platform is optimized for narrative project requiring precision and emotional resonance.</p>
+                    <p>Welcome to the Kev Sila TTS Studio—a professional-grade workstation designed to transform complex manuscripts into high-fidelity audio. This platform is optimized for narrative projects requiring precision and emotional resonance.</p>
                   </div>
                   <div className="space-y-5">
                     <p className="font-black text-gray-900 uppercase text-[11px] tracking-widest">Workflow Mastery</p>
                     <ol className="list-decimal list-inside space-y-3">
                       <li>Select your <strong>Platform Engine</strong>: Standard (Gemini), Premium (ElevenLabs), or Vault (NotebookLM).</li>
-                      <li>Use markers like <code>#</code>, <code>##</code>, <code>###</code> to adjust narrator pauses and resonance.</li>
+                      <li><strong>Quota Warning:</strong> Both session takes and voice previews consume API capacity. If the provider quota is exceeded, wait a few moments before continuing.</li>
                       <li>Monitor <strong>Batch Health</strong> to ensure segments stay under the 2,000-word limit.</li>
                     </ol>
                   </div>
@@ -354,12 +364,23 @@ function App() {
                       <button 
                         onClick={async () => {
                           if (!ttsRef.current) return;
+                          
+                          // Check and increment quota for preview
+                          if (!checkAndIncrementQuota(settings.platform)) return;
+
                           setIsPreviewing(true);
                           try {
                             const ctx = await ttsRef.current.ensureAudioContext();
                             const b = await ttsRef.current.previewVoice(settings.voice);
                             if(b) playBuffer(b);
-                          } catch(e) { console.error(e); }
+                          } catch(err: any) { 
+                            console.error(err);
+                            if (err.message?.includes('quota') || err.status === 429) {
+                               alert("Gemini API Provider Quota Exceeded. Previews are currently suspended by the API provider.");
+                            } else {
+                               alert("Vocal preview failed. Check your connection.");
+                            }
+                          }
                           setIsPreviewing(false);
                         }} 
                         disabled={isPreviewing}
@@ -450,7 +471,7 @@ function App() {
                 <WhatsAppIcon />
              </a>
            </div>
-           <div className="text-[11px] font-black bg-gray-900 text-white px-8 py-4 rounded-full uppercase tracking-[.2em] shrink-0">High Fidelity Workflow v4.7</div>
+           <div className="text-[11px] font-black bg-gray-900 text-white px-8 py-4 rounded-full uppercase tracking-[.2em] shrink-0">High Fidelity Workflow v4.8</div>
         </div>
       </footer>
 
