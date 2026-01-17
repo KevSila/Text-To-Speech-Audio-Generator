@@ -32,6 +32,7 @@ function App() {
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [showSpecs, setShowSpecs] = useState(true);
+  const [cooldown, setCooldown] = useState(0);
   
   const [metadata, setMetadata] = useState({
     chapterTitle: 'Chapter 1',
@@ -58,7 +59,7 @@ function App() {
   const currentWordCount = useMemo(() => inputText.trim() === '' ? 0 : inputText.trim().split(/\s+/).length, [inputText]);
 
   useEffect(() => {
-    const savedUsage = localStorage.getItem('studio_usage_v4.9');
+    const savedUsage = localStorage.getItem('studio_usage_v5.0');
     if (savedUsage) {
       const parsed = JSON.parse(savedUsage);
       if (parsed.lastResetDate !== new Date().toLocaleDateString()) {
@@ -69,6 +70,14 @@ function App() {
     }
   }, []);
 
+  // Cooldown interval
+  useEffect(() => {
+    if (cooldown > 0) {
+      const timer = setInterval(() => setCooldown(c => c - 1), 1000);
+      return () => clearInterval(timer);
+    }
+  }, [cooldown]);
+
   const resetLocalUsage = () => {
     const fresh = { 
       geminiRequests: 0, 
@@ -77,23 +86,28 @@ function App() {
       lastResetDate: new Date().toLocaleDateString() 
     };
     setUsage(fresh);
-    localStorage.setItem('studio_usage_v4.9', JSON.stringify(fresh));
+    localStorage.setItem('studio_usage_v5.0', JSON.stringify(fresh));
   };
 
   useEffect(() => {
     if (process.env.API_KEY) {
       ttsRef.current = new TTSService(process.env.API_KEY);
+      console.log("[Studio] Gemini Engine Initialized with provided API Key.");
+    } else {
+      console.error("[Studio] CRITICAL: API_KEY missing. Check your Netlify environment variables.");
     }
   }, []);
 
   const checkAndIncrementQuota = (platform: Platform) => {
+    if (cooldown > 0) return false;
+
     const currentLimit = LIMITS[platform];
     const currentUsage = platform === Platform.GEMINI ? usage.geminiRequests :
                          platform === Platform.ELEVEN_LABS ? usage.elevenLabsRequests :
                          usage.notebookRequests;
 
     if (currentUsage >= currentLimit) {
-      alert(`[Studio Session Full] You have reached the local taking limit for ${platform.replace('_', ' ')}. Please reset your session data or wait for the daily refresh.`);
+      alert(`[Studio Session Full] You have reached the local taking limit for ${platform.replace('_', ' ')}.`);
       return false;
     }
 
@@ -103,17 +117,17 @@ function App() {
     if (platform === Platform.NOTEBOOK_LM) nextUsage.notebookRequests += 1;
     
     setUsage(nextUsage);
-    localStorage.setItem('studio_usage_v4.9', JSON.stringify(nextUsage));
+    localStorage.setItem('studio_usage_v5.0', JSON.stringify(nextUsage));
     return true;
   };
 
   const handleSynthesize = async () => {
     if (!inputText.trim() || !ttsRef.current) return;
-    
     if (!checkAndIncrementQuota(settings.platform)) return;
 
     setIsSynthesizing(true);
     try {
+      // Vital: Resume AudioContext on every click to bypass autoplay blocks
       await ttsRef.current.ensureAudioContext();
       const buffer = await ttsRef.current.synthesize(
         inputText, 
@@ -140,11 +154,11 @@ function App() {
       const nextPartNum = parseInt(metadata.part) + 1;
       setMetadata(prev => ({ ...prev, part: nextPartNum.toString().padStart(2, '0') }));
     } catch (err: any) {
-      console.error(err);
+      console.error("[Studio] Synthesis Error:", err);
       if (err.message?.includes('quota') || err.status === 429) {
-        alert("QUOTA ALERT: Gemini API minute limit reached. Wait exactly 60 seconds for the engine to cool down before trying the next take.");
+        setCooldown(60);
       } else {
-        alert("Recording Session Error. Please verify your API key.");
+        alert("Recording Session Error. Please verify your Netlify Environment Variable API_KEY.");
       }
     } finally {
       setIsSynthesizing(false);
@@ -324,7 +338,7 @@ function App() {
                   </div>
                   <div className="space-y-5">
                     <p className="font-black text-gray-900 uppercase text-[11px] tracking-widest">Quota Management</p>
-                    <p>The Gemini Engine has a <strong>per-minute limit</strong>. If you encounter a quota error, simply pause for 60 seconds. Every take and preview consumes 1 request from your session quota.</p>
+                    <p>If you encounter a <strong>Minute-Limit block</strong>, a 60-second cooldown will automatically begin. Please wait for the timer to finish to ensure the engine is ready for the next take.</p>
                   </div>
                </div>
             </div>
@@ -380,20 +394,22 @@ function App() {
                             const b = await ttsRef.current.previewVoice(settings.voice);
                             if(b) playBuffer(b);
                           } catch(err: any) { 
-                            console.error(err);
+                            console.error("[Studio] Preview Error:", err);
                             if (err.message?.includes('quota') || err.status === 429) {
-                               alert("QUOTA LIMIT: Please wait 60 seconds before sampling another voice.");
+                               setCooldown(60);
                             } else {
-                               alert("Preview failed. Check connection.");
+                               alert("Preview failed. Verify your Netlify API_KEY settings.");
                             }
                           }
                           setIsPreviewing(false);
                         }} 
-                        disabled={isPreviewing}
-                        className="p-5 bg-gray-50 text-gray-400 rounded-2xl hover:bg-gray-900 hover:text-white transition-all active:scale-90 shadow-sm"
+                        disabled={isPreviewing || cooldown > 0}
+                        className={`p-5 rounded-2xl transition-all active:scale-90 shadow-sm ${
+                          cooldown > 0 ? 'bg-red-50 text-red-400 cursor-not-allowed' : 'bg-gray-50 text-gray-400 hover:bg-gray-900 hover:text-white'
+                        }`}
                         title="Vocal Preview"
                       >
-                        {isPreviewing ? <div className="w-5 h-5 border-2 border-gray-200 border-t-amber-500 rounded-full animate-spin"></div> : <VolumeIcon />}
+                        {isPreviewing ? <div className="w-5 h-5 border-2 border-gray-200 border-t-amber-500 rounded-full animate-spin"></div> : cooldown > 0 ? <span className="font-black text-[10px]">{cooldown}s</span> : <VolumeIcon />}
                       </button>
                     </div>
                   </div>
@@ -413,14 +429,16 @@ function App() {
                </div>
 
                <button 
-                 disabled={isSynthesizing || !inputText.trim()}
+                 disabled={isSynthesizing || !inputText.trim() || cooldown > 0}
                  onClick={handleSynthesize}
                  className={`w-full md:w-auto px-20 py-7 rounded-full font-black uppercase tracking-[.4em] text-[11px] transition-all shadow-2xl active:scale-95 ${
-                   isSynthesizing ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'text-white hover:brightness-110 shadow-gray-200 hover:-translate-y-1'
+                   isSynthesizing ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 
+                   cooldown > 0 ? 'bg-red-50 text-red-400 border border-red-100' :
+                   'text-white hover:brightness-110 shadow-gray-200 hover:-translate-y-1'
                  }`}
-                 style={{ backgroundColor: !isSynthesizing ? activeBook.themeColor : undefined }}
+                 style={{ backgroundColor: (!isSynthesizing && cooldown <= 0) ? activeBook.themeColor : undefined }}
                >
-                 {isSynthesizing ? 'RECORDING SESSION...' : `Record Narrative Take`}
+                 {isSynthesizing ? 'RECORDING SESSION...' : cooldown > 0 ? `COOLDOWN: ${cooldown}s` : `Record Narrative Take`}
                </button>
             </div>
           </div>
@@ -463,9 +481,19 @@ function App() {
       </main>
 
       <footer className="bg-white border-t border-gray-200 px-8 md:px-20 py-16 flex flex-col md:flex-row justify-between items-center gap-16 text-center md:text-left">
-        <div className="space-y-5">
-           <p className="text-[11px] font-black uppercase tracking-[.5em] text-gray-400 leading-none">Designed & Developed by Kevin Sila</p>
-           <p className="text-[13px] font-medium text-gray-400 max-w-sm leading-relaxed serif italic opacity-70">"Technology is the bridge, but the human voice is the destination."</p>
+        <div className="flex items-center gap-6">
+           <div className="space-y-5">
+              <p className="text-[11px] font-black uppercase tracking-[.5em] text-gray-400 leading-none">Designed & Developed by Kevin Sila</p>
+              <p className="text-[13px] font-medium text-gray-400 max-w-sm leading-relaxed serif italic opacity-70">"Technology is the bridge, but the human voice is the destination."</p>
+           </div>
+           <div className="h-12 w-px bg-gray-100 hidden md:block"></div>
+           <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                 <div className={`w-2 h-2 rounded-full ${process.env.API_KEY ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+                 <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{process.env.API_KEY ? 'Engine Active' : 'Key Missing'}</span>
+              </div>
+              <p className="text-[8px] uppercase tracking-widest font-bold text-gray-300">Origin: {window.location.hostname}</p>
+           </div>
         </div>
         
         <div className="flex flex-col md:flex-row items-center gap-10 md:gap-16">
@@ -477,7 +505,7 @@ function App() {
                 <WhatsAppIcon />
              </a>
            </div>
-           <div className="text-[11px] font-black bg-gray-900 text-white px-8 py-4 rounded-full uppercase tracking-[.2em] shrink-0">High Fidelity Workflow v4.9</div>
+           <div className="text-[11px] font-black bg-gray-900 text-white px-8 py-4 rounded-full uppercase tracking-[.2em] shrink-0">High Fidelity Workflow v5.0</div>
         </div>
       </footer>
 
