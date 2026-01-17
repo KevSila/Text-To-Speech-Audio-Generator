@@ -59,7 +59,7 @@ function App() {
   const currentWordCount = useMemo(() => inputText.trim() === '' ? 0 : inputText.trim().split(/\s+/).length, [inputText]);
 
   useEffect(() => {
-    const savedUsage = localStorage.getItem('studio_usage_v5.5');
+    const savedUsage = localStorage.getItem('studio_usage_v5.6');
     if (savedUsage) {
       const parsed = JSON.parse(savedUsage);
       if (parsed.lastResetDate !== new Date().toLocaleDateString()) {
@@ -85,7 +85,7 @@ function App() {
       lastResetDate: new Date().toLocaleDateString() 
     };
     setUsage(fresh);
-    localStorage.setItem('studio_usage_v5.5', JSON.stringify(fresh));
+    localStorage.setItem('studio_usage_v5.6', JSON.stringify(fresh));
   };
 
   useEffect(() => {
@@ -115,7 +115,7 @@ function App() {
     if (platform === Platform.NOTEBOOK_LM) nextUsage.notebookRequests += 1;
     
     setUsage(nextUsage);
-    localStorage.setItem('studio_usage_v5.5', JSON.stringify(nextUsage));
+    localStorage.setItem('studio_usage_v5.6', JSON.stringify(nextUsage));
     return true;
   };
 
@@ -556,7 +556,7 @@ function App() {
                 <WhatsAppIcon />
              </a>
            </div>
-           <div className="text-[11px] font-black bg-gray-900 text-white px-8 py-4 rounded-full uppercase tracking-[.2em] shrink-0">High Fidelity Workflow v5.5</div>
+           <div className="text-[11px] font-black bg-gray-900 text-white px-8 py-4 rounded-full uppercase tracking-[.2em] shrink-0">High Fidelity Workflow v5.6</div>
         </div>
       </footer>
 
