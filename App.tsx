@@ -15,7 +15,12 @@ const InfoIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height
 const MailIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>;
 const WhatsAppIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 1 1-7.6-10.4 8.38 8.38 0 0 1 3.8.9L21 4.25z"/></svg>;
 
-const GEMINI_REQ_LIMIT = 1500; 
+const LIMITS = {
+  [Platform.GEMINI]: 1500,
+  [Platform.ELEVEN_LABS]: 100,
+  [Platform.NOTEBOOK_LM]: 200,
+};
+
 const SAFE_BATCH_WORDS = 1800;
 const MAX_BATCH_WORDS = 2200;
 
@@ -35,6 +40,8 @@ function App() {
 
   const [usage, setUsage] = useState({
     geminiRequests: 0,
+    elevenLabsRequests: 0,
+    notebookRequests: 0,
     lastResetDate: new Date().toLocaleDateString()
   });
 
@@ -51,11 +58,16 @@ function App() {
   const currentWordCount = useMemo(() => inputText.trim() === '' ? 0 : inputText.trim().split(/\s+/).length, [inputText]);
 
   useEffect(() => {
-    const savedUsage = localStorage.getItem('studio_usage_v4.5');
+    const savedUsage = localStorage.getItem('studio_usage_v4.7');
     if (savedUsage) {
       const parsed = JSON.parse(savedUsage);
       if (parsed.lastResetDate !== new Date().toLocaleDateString()) {
-        setUsage({ geminiRequests: 0, lastResetDate: new Date().toLocaleDateString() });
+        setUsage({ 
+          geminiRequests: 0, 
+          elevenLabsRequests: 0, 
+          notebookRequests: 0, 
+          lastResetDate: new Date().toLocaleDateString() 
+        });
       } else {
         setUsage(parsed);
       }
@@ -70,15 +82,19 @@ function App() {
 
   const handleSynthesize = async () => {
     if (!inputText.trim() || !ttsRef.current) return;
-    if (usage.geminiRequests >= GEMINI_REQ_LIMIT) {
-      alert("Daily quota limit reached."); return;
+    
+    const currentLimit = LIMITS[settings.platform];
+    const currentUsage = settings.platform === Platform.GEMINI ? usage.geminiRequests :
+                         settings.platform === Platform.ELEVEN_LABS ? usage.elevenLabsRequests :
+                         usage.notebookRequests;
+
+    if (currentUsage >= currentLimit) {
+      alert(`${settings.platform.replace('_', ' ')} daily quota limit reached.`); return;
     }
 
     setIsSynthesizing(true);
     try {
-      // AudioContext must be resumed inside the user event handler chain
       await ttsRef.current.ensureAudioContext();
-      
       const buffer = await ttsRef.current.synthesize(
         inputText, 
         settings.voice, 
@@ -101,17 +117,19 @@ function App() {
 
       setChunks(prev => [newChunk, ...prev]);
       setUsage(prev => {
-        const next = { ...prev, geminiRequests: prev.geminiRequests + 1 };
-        localStorage.setItem('studio_usage_v4.5', JSON.stringify(next));
+        const next = { ...prev };
+        if (settings.platform === Platform.GEMINI) next.geminiRequests += 1;
+        if (settings.platform === Platform.ELEVEN_LABS) next.elevenLabsRequests += 1;
+        if (settings.platform === Platform.NOTEBOOK_LM) next.notebookRequests += 1;
+        localStorage.setItem('studio_usage_v4.7', JSON.stringify(next));
         return next;
       });
       setInputText('');
-      
       const nextPartNum = parseInt(metadata.part) + 1;
       setMetadata(prev => ({ ...prev, part: nextPartNum.toString().padStart(2, '0') }));
     } catch (err) {
       console.error(err);
-      alert("Recording failed. Please ensure your API key is correct and your internet is stable.");
+      alert("Recording failed. Please check your connection.");
     } finally {
       setIsSynthesizing(false);
     }
@@ -152,7 +170,6 @@ function App() {
 
   return (
     <div className="min-h-screen bg-[#F5F5F3] text-[#1a1a1a] flex flex-col font-sans overflow-x-hidden selection:bg-amber-100">
-      {/* Header */}
       <nav className="bg-white border-b border-gray-200 px-4 md:px-10 py-5 flex flex-col lg:flex-row justify-between items-center gap-6 sticky top-0 z-50 shadow-sm">
         <div className="flex items-center gap-6 w-full lg:w-auto">
           <div className="flex flex-col">
@@ -202,7 +219,6 @@ function App() {
       </nav>
 
       <main className="flex-1 flex flex-col lg:flex-row max-w-[1600px] mx-auto w-full p-4 md:p-8 gap-8">
-        {/* Left Side: Meta & Quota */}
         <aside className="w-full lg:w-80 flex flex-col gap-8 order-2 lg:order-1">
           <div className="bg-white rounded-[32px] p-7 shadow-sm border border-gray-100">
             <h3 className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-6 flex items-center gap-2">
@@ -219,26 +235,12 @@ function App() {
                 />
               </div>
               <div>
-                <div className="flex justify-between items-center mb-2">
-                   <label className="text-[10px] font-black uppercase text-gray-400 tracking-wide">File Part (Take)</label>
-                   <div className="group relative">
-                      <InfoIcon />
-                      <div className="absolute left-full ml-4 -top-12 w-64 bg-gray-900 text-white text-[10px] p-4 rounded-2xl shadow-2xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none z-50 leading-relaxed border border-gray-800">
-                         <strong>Performance Strategy:</strong> AI models perform best when synthesizing under 2,000 words. Split your chapter into "Takes" (Part 01, 02...) for seamless professional assembly.
-                      </div>
-                   </div>
-                </div>
+                <label className="text-[10px] font-black uppercase text-gray-400 block mb-2 tracking-wide">File Part (Take)</label>
                 <input 
                   className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-3.5 text-sm font-bold" 
                   value={metadata.part} 
                   onChange={e => setMetadata({...metadata, part: e.target.value})} 
                 />
-              </div>
-              <div className="pt-4 border-t border-gray-50">
-                 <p className="text-[9px] text-gray-400 font-black uppercase tracking-widest mb-2">Live Nomenclature:</p>
-                 <p className="text-[11px] text-amber-800 font-mono font-bold break-all bg-amber-50/70 p-3 rounded-xl border border-amber-100/50">
-                    {activeBook.title.toUpperCase()}_{metadata.chapterTitle.toUpperCase().replace(/\s+/g, '_')}_{metadata.part}.wav
-                 </p>
               </div>
             </div>
           </div>
@@ -247,7 +249,7 @@ function App() {
             <h3 className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-6 flex items-center gap-2">
               <ActivityIcon /> Script performance
             </h3>
-            <div className="space-y-5">
+            <div className="space-y-4">
               {[
                 { s: '#', d: 'Main Title (Resonant)' },
                 { s: '##', d: 'Subtitle (Grounded)' },
@@ -263,21 +265,32 @@ function App() {
             </div>
           </div>
           
-          <div className="bg-white rounded-[32px] p-7 shadow-sm border border-gray-100 mt-auto">
-             <div className="flex justify-between items-center mb-4">
-                <span className="text-[10px] font-black uppercase text-gray-400 tracking-[.2em]">GEMINI CAPACITY TAKES</span>
-                <span className="text-[10px] font-black text-gray-600">{usage.geminiRequests}/{GEMINI_REQ_LIMIT}</span>
-             </div>
-             <div className="h-2 bg-gray-50 rounded-full overflow-hidden">
-                <div className="h-full bg-amber-600 transition-all duration-1000" style={{ width: `${(usage.geminiRequests/GEMINI_REQ_LIMIT)*100}%` }} />
-             </div>
+          <div className="bg-white rounded-[32px] p-7 shadow-sm border border-gray-100 mt-auto flex flex-col gap-5">
+             <h3 className="text-[11px] font-black uppercase tracking-widest text-gray-400 flex items-center gap-2">
+               <ActivityIcon /> Engine Capacities
+             </h3>
+             
+             {[
+               { id: Platform.GEMINI, label: 'Gemini Capacity Takes', usage: usage.geminiRequests, limit: LIMITS[Platform.GEMINI], color: 'bg-amber-600' },
+               { id: Platform.ELEVEN_LABS, label: 'ElevenLabs Premium Quota', usage: usage.elevenLabsRequests, limit: LIMITS[Platform.ELEVEN_LABS], color: 'bg-indigo-600' },
+               { id: Platform.NOTEBOOK_LM, label: 'Vault (NotebookLM) Limit', usage: usage.notebookRequests, limit: LIMITS[Platform.NOTEBOOK_LM], color: 'bg-emerald-600' }
+             ].map(eng => (
+               <div key={eng.id} className={`transition-all duration-300 ${settings.platform === eng.id ? 'scale-105 opacity-100 ring-2 ring-gray-50 p-2 rounded-2xl -m-2' : 'opacity-40 grayscale-[0.5]'}`}>
+                  <div className="flex justify-between items-center mb-1.5 px-1">
+                     <span className="text-[8px] font-black uppercase text-gray-500 tracking-wider">{eng.label}</span>
+                     <span className="text-[9px] font-black text-gray-600">{eng.usage}/{eng.limit}</span>
+                  </div>
+                  <div className="h-1.5 bg-gray-50 rounded-full overflow-hidden border border-gray-100">
+                     <div className={`h-full ${eng.color} transition-all duration-1000 ${settings.platform === eng.id ? 'animate-pulse' : ''}`} style={{ width: `${(eng.usage/eng.limit)*100}%` }} />
+                  </div>
+               </div>
+             ))}
           </div>
         </aside>
 
-        {/* Center: Main Editor */}
         <section className="flex-1 flex flex-col gap-8 order-1 lg:order-2">
           {showSpecs && (
-            <div className="bg-white p-8 md:p-12 rounded-[48px] border-2 border-dashed border-gray-200 animate-in slide-in-from-top-10 duration-1000 shadow-sm relative overflow-hidden group">
+            <div className="bg-white p-8 md:p-12 rounded-[48px] border-2 border-dashed border-gray-200 animate-in slide-in-from-top-10 shadow-sm relative overflow-hidden group">
                <div className="absolute top-0 left-0 w-2 h-full bg-amber-500"></div>
                <h2 className="text-sm font-black uppercase tracking-[.5em] mb-8 flex items-center gap-4 text-gray-900">
                  <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div> Studio Onboarding & Specs
@@ -285,19 +298,15 @@ function App() {
                <div className="grid md:grid-cols-2 gap-12 text-[13px] leading-relaxed text-gray-500">
                   <div className="space-y-5">
                     <p className="font-black text-gray-900 uppercase text-[11px] tracking-widest">Universal Production Suite</p>
-                    <p>Welcome to the Kev Sila TTS Studio—a professional-grade workstation designed to transform complex manuscripts into high-fidelity audio. This platform is optimized for the 'Solitude In The Digital Age' audiobook but remains versatile for any narrative project requiring precision and emotional resonance.</p>
-                    <p className="font-black text-gray-900 uppercase text-[11px] tracking-widest pt-4">Multi-Platform Ecosystem</p>
-                    <p>Harness the lightning-fast performance of <strong>Gemini Flash Native Audio</strong> for bulk recording, switch to <strong>ElevenLabs</strong> (Premium) for unparalleled emotional texture, or utilize the <strong>Vault (NotebookLM)</strong> for structured analytical summaries. Every engine is tuned for the specific needs of modern audio production.</p>
+                    <p>Welcome to the Kev Sila TTS Studio—a professional-grade workstation designed to transform complex manuscripts into high-fidelity audio. This platform is optimized for narrative project requiring precision and emotional resonance.</p>
                   </div>
                   <div className="space-y-5">
-                    <p className="font-black text-gray-900 uppercase text-[11px] tracking-widest">Workflow Mastery & Usage</p>
+                    <p className="font-black text-gray-900 uppercase text-[11px] tracking-widest">Workflow Mastery</p>
                     <ol className="list-decimal list-inside space-y-3">
-                      <li><strong>Select Profile:</strong> Choose your project theme for stylistic consistency across all narration takes.</li>
-                      <li><strong>Script Symbols:</strong> Insert markers like <code>#</code>, <code>##</code>, <code>###</code>, <code>&gt;</code>, or <code>[]</code> to automatically adjust narrator pauses and vocal resonance without manual post-editing.</li>
-                      <li><strong>Batch Logic:</strong> For the best AI performance, split long chapters into "Takes" (Part 01, 02...). The <strong>Batch Health Monitoring</strong> meter will alert you if your text exceeds the optimal 2,000-word limit.</li>
-                      <li><strong>Automatic Nomenclature:</strong> Files are saved in the studio-standard <code>BOOK_CHAPTER_PART.wav</code> format for immediate use in professional DAWs.</li>
+                      <li>Select your <strong>Platform Engine</strong>: Standard (Gemini), Premium (ElevenLabs), or Vault (NotebookLM).</li>
+                      <li>Use markers like <code>#</code>, <code>##</code>, <code>###</code> to adjust narrator pauses and resonance.</li>
+                      <li>Monitor <strong>Batch Health</strong> to ensure segments stay under the 2,000-word limit.</li>
                     </ol>
-                    <p className="text-[11px] italic mt-4 border-t border-gray-50 pt-4 font-semibold text-amber-800">Note: Browser sound is often paused by default. If you hear nothing, ensure you have clicked anywhere on this dashboard to activate the high-fidelity audio engine.</p>
                   </div>
                </div>
             </div>
@@ -336,7 +345,7 @@ function App() {
                     <label className="text-[11px] font-black uppercase text-gray-400 tracking-wider">Narrator Profile</label>
                     <div className="flex items-center gap-4">
                       <select 
-                        className="bg-gray-50 border-none rounded-[20px] text-[13px] font-bold px-6 py-5 min-w-[200px] appearance-none outline-none cursor-pointer focus:ring-4 focus:ring-amber-50/50 transition-all shadow-sm"
+                        className="bg-gray-50 border-none rounded-[20px] text-[13px] font-bold px-6 py-5 min-w-[260px] appearance-none outline-none cursor-pointer focus:ring-4 focus:ring-amber-50/50 transition-all shadow-sm"
                         value={settings.voice}
                         onChange={e => setSettings({...settings, voice: e.target.value as VoiceName})}
                       >
@@ -347,19 +356,10 @@ function App() {
                           if (!ttsRef.current) return;
                           setIsPreviewing(true);
                           try {
-                            // Resume context immediately within the same event handler chain
                             const ctx = await ttsRef.current.ensureAudioContext();
-                            
                             const b = await ttsRef.current.previewVoice(settings.voice);
-                            if(b) {
-                              // Ensure context is running again before playback
-                              if (ctx.state !== 'running') await ctx.resume();
-                              playBuffer(b);
-                            }
-                          } catch(e) { 
-                            console.error(e);
-                            alert("Audio Engine Error: Ensure your API key is correctly configured. Note: Audio requires a user gesture; if this is your first interaction, try clicking again.");
-                          }
+                            if(b) playBuffer(b);
+                          } catch(e) { console.error(e); }
                           setIsPreviewing(false);
                         }} 
                         disabled={isPreviewing}
@@ -399,7 +399,6 @@ function App() {
           </div>
         </section>
 
-        {/* Right Side: Master Session History */}
         <aside className="w-full lg:w-96 flex flex-col gap-8 order-3">
            <div className="flex items-center justify-between">
               <h3 className="text-[11px] font-black uppercase tracking-[.4em] text-gray-400">Master Session</h3>
@@ -412,20 +411,14 @@ function App() {
                  </div>
               ) : (
                  chunks.map(c => (
-                   <div key={c.id} className="bg-white p-7 rounded-[40px] shadow-sm border border-gray-50 hover:shadow-2xl transition-all group relative animate-in fade-in slide-in-from-right-4">
-                     <p className="text-[12px] italic font-serif text-gray-500 line-clamp-2 mb-4 leading-relaxed">"{c.text}"</p>
+                   <div key={c.id} className="bg-white p-7 rounded-[40px] shadow-sm border border-gray-50 hover:shadow-2xl transition-all group relative">
+                     <p className="text-[12px] italic font-serif text-gray-500 line-clamp-2 mb-4">"{c.text}"</p>
                      <div className="flex items-center justify-between text-[10px] font-black text-gray-400 uppercase mb-6 tracking-widest">
                        <span className="bg-gray-50 px-4 py-1.5 rounded-xl text-amber-900/40">{c.metadata?.chapterTitle} Take {c.metadata?.part}</span>
                        <span>{c.duration.toFixed(1)}s</span>
                      </div>
                      <div className="flex gap-4">
-                        <button onClick={async () => {
-                          if (c.audioBuffer) {
-                            const ctx = await ttsRef.current?.ensureAudioContext();
-                            if (ctx && ctx.state !== 'running') await ctx.resume();
-                            playBuffer(c.audioBuffer);
-                          }
-                        }} className="flex-1 py-4 bg-gray-50 hover:bg-gray-900 hover:text-white rounded-2xl flex justify-center transition-all active:scale-95 shadow-sm">
+                        <button onClick={() => c.audioBuffer && playBuffer(c.audioBuffer)} className="flex-1 py-4 bg-gray-50 hover:bg-gray-900 hover:text-white rounded-2xl flex justify-center transition-all active:scale-95 shadow-sm">
                            <PlayIcon />
                         </button>
                         <button onClick={() => handleDownload(c)} className="p-4 bg-gray-50 hover:bg-amber-600 hover:text-white rounded-2xl text-gray-400 transition-all active:scale-95 shadow-sm">
@@ -442,29 +435,29 @@ function App() {
         </aside>
       </main>
 
-      <footer className="bg-white border-t border-gray-200 px-8 md:px-20 py-16 md:py-24 flex flex-col md:flex-row justify-between items-center gap-16 text-center md:text-left">
+      <footer className="bg-white border-t border-gray-200 px-8 md:px-20 py-16 flex flex-col md:flex-row justify-between items-center gap-16 text-center md:text-left">
         <div className="space-y-5">
            <p className="text-[11px] font-black uppercase tracking-[.5em] text-gray-400 leading-none">Designed & Developed by Kevin Sila</p>
-           <p className="text-[13px] font-medium text-gray-400 max-w-sm leading-relaxed serif italic opacity-70">"Technology is the bridge, but the human voice is the destination." <br/> — K.S. © 2025 All Rights Reserved.</p>
+           <p className="text-[13px] font-medium text-gray-400 max-w-sm leading-relaxed serif italic opacity-70">"Technology is the bridge, but the human voice is the destination."</p>
         </div>
         
         <div className="flex flex-col md:flex-row items-center gap-10 md:gap-16">
            <div className="flex gap-8">
-             <a href="mailto:kevinsila1002@GMAIL.COM" title="Email Developer" className="p-5 rounded-full bg-gray-50 text-gray-400 hover:bg-amber-600 hover:text-white transition-all shadow-sm hover:scale-110">
+             <a href="mailto:kevinsila1002@GMAIL.COM" className="p-5 rounded-full bg-gray-50 text-gray-400 hover:bg-amber-600 hover:text-white transition-all shadow-sm">
                 <MailIcon />
              </a>
-             <a href="https://wa.me/254717578394" target="_blank" rel="noopener noreferrer" title="WhatsApp Developer" className="p-5 rounded-full bg-gray-50 text-gray-400 hover:bg-green-600 hover:text-white transition-all shadow-sm hover:scale-110">
+             <a href="https://wa.me/254717578394" target="_blank" className="p-5 rounded-full bg-gray-50 text-gray-400 hover:bg-green-600 hover:text-white transition-all shadow-sm">
                 <WhatsAppIcon />
              </a>
            </div>
-           <div className="text-[11px] font-black bg-gray-900 text-white px-8 py-4 rounded-full uppercase tracking-[.2em] shrink-0 shadow-2xl">High Fidelity Workflow v4.5</div>
+           <div className="text-[11px] font-black bg-gray-900 text-white px-8 py-4 rounded-full uppercase tracking-[.2em] shrink-0">High Fidelity Workflow v4.7</div>
         </div>
       </footer>
 
       {isPlaying && (
-        <div className="fixed bottom-10 right-10 bg-gray-900 text-white p-6 rounded-[32px] flex items-center gap-10 shadow-2xl z-[100] animate-in slide-in-from-bottom-10 duration-500">
+        <div className="fixed bottom-10 right-10 bg-gray-900 text-white p-6 rounded-[32px] flex items-center gap-10 shadow-2xl z-[100] animate-in slide-in-from-bottom-10">
            <div className="flex items-center gap-5">
-             <div className="w-3 h-3 bg-amber-500 rounded-full animate-pulse shadow-[0_0_15px_#f59e0b]"></div>
+             <div className="w-3 h-3 bg-amber-500 rounded-full animate-pulse"></div>
              <span className="text-[11px] font-black uppercase tracking-[.3em]">Monitoring</span>
            </div>
            <button onClick={() => {sourceRef.current?.stop(); setIsPlaying(false);}} className="text-[11px] font-black px-8 py-3 bg-white/10 hover:bg-white/20 rounded-2xl transition-all uppercase tracking-widest">Terminate</button>

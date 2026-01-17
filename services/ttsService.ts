@@ -11,29 +11,21 @@ export class TTSService {
     this.ai = new GoogleGenAI({ apiKey });
   }
 
-  /**
-   * Initializes or resumes the AudioContext. 
-   * CRITICAL: Must be called inside a user-triggered event handler (onClick).
-   */
   async ensureAudioContext(): Promise<AudioContext> {
     if (!this.audioContext) {
       this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
     }
-    
-    // Resume context if suspended (browser policy)
     if (this.audioContext.state !== 'running') {
       try {
         await this.audioContext.resume();
       } catch (e) {
-        console.warn("AudioContext resume failed, might be blocked by browser policy:", e);
+        console.warn("AudioContext resume failed:", e);
       }
     }
-    
     return this.audioContext;
   }
 
   async previewVoice(voice: VoiceName): Promise<AudioBuffer> {
-    // Resume context immediately at the start of the user gesture chain
     const ctx = await this.ensureAudioContext();
     
     const previewTexts: Record<string, string> = {
@@ -42,11 +34,17 @@ export class TTSService {
       [VoiceName.KORE]: "I am Kore. Precise and modern, ideal for structural manuscripts.",
       [VoiceName.FENRIR]: "I am Fenrir. Deep and steady for authoritative storytelling.",
       [VoiceName.PUCK]: "Hi! I'm Puck. Light and engaging for energetic scripts.",
-      [VoiceName.ADAM]: "Adam here. Rich and narrative (ElevenLabs Profile).",
-      [VoiceName.BELLA]: "Bella here. Soft and emotional (ElevenLabs Profile).",
-      [VoiceName.RACHEL]: "Rachel here. Professional and crisp (ElevenLabs Profile).",
-      [VoiceName.JOSH]: "Josh here. Deeply narrative (ElevenLabs Profile).",
-      [VoiceName.NOTEBOOK_V1]: "NotebookLM voice ready for summary analysis."
+      [VoiceName.ADAM]: "Adam here. Rich and narrative, built for long-form books.",
+      [VoiceName.BELLA]: "Bella here. Soft and emotional for deeper connections.",
+      [VoiceName.RACHEL]: "Rachel here. Professional, crisp, and executive.",
+      [VoiceName.JOSH]: "Josh here. Deeply narrative and dynamic.",
+      [VoiceName.SARAH]: "Sarah here. Warmth and professionalism combined.",
+      [VoiceName.ANTONI]: "Antoni here. A classic authorial tone.",
+      [VoiceName.NICOLE]: "Nicole here. Gentle, whispery, and deeply reflective.",
+      [VoiceName.BILL]: "Bill here. The voice of authority and age.",
+      [VoiceName.NOTEBOOK_V1]: "Analytical system ready for data extraction.",
+      [VoiceName.NOTEBOOK_V2]: "Structural processing engaged for complex vaults.",
+      [VoiceName.NOTEBOOK_V3]: "Conversational logic active for podcast output."
     };
 
     const targetVoice = this.mapToNativeVoice(voice);
@@ -67,7 +65,7 @@ export class TTSService {
     });
 
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (!base64Audio) throw new Error("No preview audio returned from API.");
+    if (!base64Audio) throw new Error("No preview audio returned.");
 
     return await decodeAudioData(decodeBase64(base64Audio), ctx, 24000, 1);
   }
@@ -75,8 +73,18 @@ export class TTSService {
   private mapToNativeVoice(voice: VoiceName): string {
     const native = [VoiceName.CHARON, VoiceName.ZEPHYR, VoiceName.KORE, VoiceName.FENRIR, VoiceName.PUCK];
     if (native.includes(voice)) return voice;
-    if (voice === VoiceName.ADAM || voice === VoiceName.JOSH) return VoiceName.FENRIR;
-    if (voice === VoiceName.BELLA || voice === VoiceName.RACHEL) return VoiceName.KORE;
+
+    // Map ElevenLabs profiles to Gemini equivalents
+    const deepVoices = [VoiceName.ADAM, VoiceName.JOSH, VoiceName.BILL, VoiceName.ANTONI];
+    const softVoices = [VoiceName.BELLA, VoiceName.NICOLE, VoiceName.SARAH, VoiceName.RACHEL];
+    
+    if (deepVoices.includes(voice)) return VoiceName.FENRIR;
+    if (softVoices.includes(voice)) return VoiceName.KORE;
+    
+    // NotebookLM mapping
+    if (voice === VoiceName.NOTEBOOK_V3) return VoiceName.PUCK;
+    if (voice === VoiceName.NOTEBOOK_V2) return VoiceName.FENRIR;
+    
     return VoiceName.ZEPHYR;
   }
 
@@ -89,16 +97,12 @@ export class TTSService {
     Vocal Persona: ${styleDescription}
     Reading Speed: ${speedStr}x.
 
-    STRUCTURAL PERFORMANCE CUES (IMPORTANT):
-    - '#' (BOOK TITLE): Maximum resonance, authoritative focus. 3s pause after.
-    - '##' (SUBTITLE): Grounded, steady emphasis. 2.5s pause after.
-    - '###' (CHAPTER TITLE/SECTION): Clear energetic shift. 2s pause after.
-    - '####' (SUB-SECTION): Precise and narrative. 1.5s pause after.
-    - '>' (REFLECTIVE PROMPT): Slower, ethereal, questioning tone. 3s pause after.
-    - '[WISDOM CARD]': Warm, revered, storytelling cadence. 2s pause after.
-    - '•', '*', '-' (BULLET POINTS): Rhythmic list cadence. 1.2s gap between.
-    
-    PERFORMANCE RULE: Use these markers to adjust your voice, but NEVER speak the symbols themselves.
+    STRUCTURAL PERFORMANCE CUES:
+    - '#' (BOOK TITLE): Maximum resonance. 3s pause.
+    - '##' (SUBTITLE): Grounded, steady emphasis. 2.5s pause.
+    - '###' (CHAPTER TITLE): Clear energetic shift. 2s pause.
+    - '>' (REFLECTIVE PROMPT): Slower, ethereal tone. 3s pause.
+    - '[WISDOM CARD]': Warm, revered storytelling cadence. 2s pause.
     
     MANUSCRIPT: 
     ${text}`;
@@ -117,12 +121,8 @@ export class TTSService {
     });
 
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (!base64Audio) throw new Error("Synthesis failed. No audio data.");
+    if (!base64Audio) throw new Error("Synthesis failed.");
 
     return await decodeAudioData(decodeBase64(base64Audio), ctx, 24000, 1);
-  }
-
-  getAudioContext() {
-    return this.audioContext;
   }
 }

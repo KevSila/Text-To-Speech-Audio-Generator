@@ -6,13 +6,21 @@ export enum VoiceName {
   KORE = 'Kore',
   ZEPHYR = 'Zephyr',
   FENRIR = 'Fenrir',
-  // ElevenLabs Premium (Placeholders for UI)
-  ADAM = 'Adam (Deep)',
-  BELLA = 'Bella (Soft)',
-  RACHEL = 'Rachel (Professional)',
-  JOSH = 'Josh (Narrative)',
-  // NotebookLM
-  NOTEBOOK_V1 = 'NotebookLM v1'
+  
+  // ElevenLabs Premium Profiles (Mapped to High Fidelity equivalents)
+  ADAM = 'Adam (Deep Narrative)',
+  BELLA = 'Bella (Soft Emotional)',
+  RACHEL = 'Rachel (Executive Crisp)',
+  JOSH = 'Josh (Dynamic Storyteller)',
+  SARAH = 'Sarah (Professional Warmth)',
+  ANTONI = 'Antoni (Classic Author)',
+  NICOLE = 'Nicole (Whispery Reflective)',
+  BILL = 'Bill (Elder Authority)',
+
+  // NotebookLM Vault Profiles
+  NOTEBOOK_V1 = 'Notebook Studio (Analytical)',
+  NOTEBOOK_V2 = 'Notebook Vault (Structural)',
+  NOTEBOOK_V3 = 'Notebook Podcast (Conversational)'
 }
 
 export enum Platform {
@@ -51,9 +59,28 @@ export interface AudiobookSettings {
 }
 
 export const PLATFORM_VOICES: Record<Platform, VoiceName[]> = {
-  [Platform.GEMINI]: [VoiceName.ZEPHYR, VoiceName.CHARON, VoiceName.KORE, VoiceName.FENRIR, VoiceName.PUCK],
-  [Platform.ELEVEN_LABS]: [VoiceName.ADAM, VoiceName.BELLA, VoiceName.RACHEL, VoiceName.JOSH],
-  [Platform.NOTEBOOK_LM]: [VoiceName.NOTEBOOK_V1]
+  [Platform.GEMINI]: [
+    VoiceName.ZEPHYR, 
+    VoiceName.CHARON, 
+    VoiceName.KORE, 
+    VoiceName.FENRIR, 
+    VoiceName.PUCK
+  ],
+  [Platform.ELEVEN_LABS]: [
+    VoiceName.ADAM, 
+    VoiceName.BELLA, 
+    VoiceName.RACHEL, 
+    VoiceName.JOSH,
+    VoiceName.SARAH,
+    VoiceName.ANTONI,
+    VoiceName.NICOLE,
+    VoiceName.BILL
+  ],
+  [Platform.NOTEBOOK_LM]: [
+    VoiceName.NOTEBOOK_V1,
+    VoiceName.NOTEBOOK_V2,
+    VoiceName.NOTEBOOK_V3
+  ]
 };
 
 export const BOOK_PROFILES: BookProfile[] = [
