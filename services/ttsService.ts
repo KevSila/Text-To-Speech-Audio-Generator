@@ -13,23 +13,29 @@ export class TTSService {
 
   /**
    * Initializes or resumes the AudioContext. 
-   * CRITICAL: Must be called at the very start of a user-triggered event.
+   * CRITICAL: Must be called inside a user-triggered event handler (onClick).
    */
   async ensureAudioContext(): Promise<AudioContext> {
     if (!this.audioContext) {
       this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
     }
     
-    // Always attempt to resume as some browsers re-suspend it
+    // Resume context if suspended (browser policy)
     if (this.audioContext.state !== 'running') {
-      await this.audioContext.resume();
+      try {
+        await this.audioContext.resume();
+      } catch (e) {
+        console.warn("AudioContext resume failed, might be blocked by browser policy:", e);
+      }
     }
     
     return this.audioContext;
   }
 
   async previewVoice(voice: VoiceName): Promise<AudioBuffer> {
+    // Resume context immediately at the start of the user gesture chain
     const ctx = await this.ensureAudioContext();
+    
     const previewTexts: Record<string, string> = {
       [VoiceName.CHARON]: "Greetings. I am Charon. My voice carries the weight of time.",
       [VoiceName.ZEPHYR]: "Hello. I am Zephyr. I provide professional narration for Solitude.",

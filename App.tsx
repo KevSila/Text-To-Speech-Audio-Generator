@@ -76,7 +76,7 @@ function App() {
 
     setIsSynthesizing(true);
     try {
-      // CRITICAL: AudioContext must be resumed at the very top level of the user event
+      // AudioContext must be resumed inside the user event handler chain
       await ttsRef.current.ensureAudioContext();
       
       const buffer = await ttsRef.current.synthesize(
@@ -250,6 +250,7 @@ function App() {
             <div className="space-y-5">
               {[
                 { s: '#', d: 'Main Title (Resonant)' },
+                { s: '##', d: 'Subtitle (Grounded)' },
                 { s: '###', d: 'Chapter Start (Energetic)' },
                 { s: '>', d: 'Reflective Prompt (Soft)' },
                 { s: '[]', d: 'Wisdom Card (Warm)' }
@@ -279,23 +280,24 @@ function App() {
             <div className="bg-white p-8 md:p-12 rounded-[48px] border-2 border-dashed border-gray-200 animate-in slide-in-from-top-10 duration-1000 shadow-sm relative overflow-hidden group">
                <div className="absolute top-0 left-0 w-2 h-full bg-amber-500"></div>
                <h2 className="text-sm font-black uppercase tracking-[.5em] mb-8 flex items-center gap-4 text-gray-900">
-                 <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div> Studio Onboarding
+                 <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div> Studio Onboarding & Specs
                </h2>
                <div className="grid md:grid-cols-2 gap-12 text-[13px] leading-relaxed text-gray-500">
                   <div className="space-y-5">
                     <p className="font-black text-gray-900 uppercase text-[11px] tracking-widest">Universal Production Suite</p>
-                    <p>Welcome to the Kev Sila TTS Studio—a professional-grade workstation that transforms written scripts into high-fidelity audio. Whether you are generating technical docs or soulful audiobooks, our studio adapts to your vision.</p>
+                    <p>Welcome to the Kev Sila TTS Studio—a professional-grade workstation designed to transform complex manuscripts into high-fidelity audio. This platform is optimized for the 'Solitude In The Digital Age' audiobook but remains versatile for any narrative project requiring precision and emotional resonance.</p>
                     <p className="font-black text-gray-900 uppercase text-[11px] tracking-widest pt-4">Multi-Platform Ecosystem</p>
-                    <p>Seamlessly switch between <strong>Gemini</strong> for bulk recording, <strong>ElevenLabs</strong> for premium emotional depth, and <strong>Vault</strong> for analytical summaries. Each engine is tuned for accuracy and speed.</p>
+                    <p>Harness the lightning-fast performance of <strong>Gemini Flash Native Audio</strong> for bulk recording, switch to <strong>ElevenLabs</strong> (Premium) for unparalleled emotional texture, or utilize the <strong>Vault (NotebookLM)</strong> for structured analytical summaries. Every engine is tuned for the specific needs of modern audio production.</p>
                   </div>
                   <div className="space-y-5">
-                    <p className="font-black text-gray-900 uppercase text-[11px] tracking-widest">Workflow Mastery</p>
+                    <p className="font-black text-gray-900 uppercase text-[11px] tracking-widest">Workflow Mastery & Usage</p>
                     <ol className="list-decimal list-inside space-y-3">
-                      <li>Select your <strong>Book/Project Profile</strong> for stylistic consistency.</li>
-                      <li>Use the <strong>Script Performance Guide</strong> to insert pauses and vocal shifts using custom markdown symbols.</li>
-                      <li>Monitor the <strong>Batch Health</strong> meter to ensure segments stay under the optimal 2,000-word limit for maximum AI stability.</li>
+                      <li><strong>Select Profile:</strong> Choose your project theme for stylistic consistency across all narration takes.</li>
+                      <li><strong>Script Symbols:</strong> Insert markers like <code>#</code>, <code>##</code>, <code>###</code>, <code>&gt;</code>, or <code>[]</code> to automatically adjust narrator pauses and vocal resonance without manual post-editing.</li>
+                      <li><strong>Batch Logic:</strong> For the best AI performance, split long chapters into "Takes" (Part 01, 02...). The <strong>Batch Health Monitoring</strong> meter will alert you if your text exceeds the optimal 2,000-word limit.</li>
+                      <li><strong>Automatic Nomenclature:</strong> Files are saved in the studio-standard <code>BOOK_CHAPTER_PART.wav</code> format for immediate use in professional DAWs.</li>
                     </ol>
-                    <p className="text-[11px] italic mt-4 border-t border-gray-50 pt-4">"If the audio fails to play in your browser, ensure you have clicked anywhere on the interface to 'wake' the studio's audio engine."</p>
+                    <p className="text-[11px] italic mt-4 border-t border-gray-50 pt-4 font-semibold text-amber-800">Note: Browser sound is often paused by default. If you hear nothing, ensure you have clicked anywhere on this dashboard to activate the high-fidelity audio engine.</p>
                   </div>
                </div>
             </div>
@@ -320,7 +322,7 @@ function App() {
                <div className="flex justify-between text-[11px] font-black uppercase tracking-widest mb-4">
                  <span>Batch Health Monitoring</span>
                  <span className={currentWordCount > SAFE_BATCH_WORDS ? 'text-amber-600' : 'text-green-500'}>
-                    {currentWordCount > MAX_BATCH_WORDS ? 'Segment Risk' : 'Optimal Performance'}
+                    {currentWordCount > MAX_BATCH_WORDS ? 'Segment Risk Detected' : 'Optimal Take Performance'}
                  </span>
                </div>
                <div className="h-3 w-full bg-gray-50 rounded-full overflow-hidden">
@@ -345,14 +347,18 @@ function App() {
                           if (!ttsRef.current) return;
                           setIsPreviewing(true);
                           try {
-                            // CRITICAL: AudioContext MUST be resumed/initialized inside the event handler stack
-                            await ttsRef.current.ensureAudioContext();
+                            // Resume context immediately within the same event handler chain
+                            const ctx = await ttsRef.current.ensureAudioContext();
                             
                             const b = await ttsRef.current.previewVoice(settings.voice);
-                            if(b) await playBuffer(b);
+                            if(b) {
+                              // Ensure context is running again before playback
+                              if (ctx.state !== 'running') await ctx.resume();
+                              playBuffer(b);
+                            }
                           } catch(e) { 
                             console.error(e);
-                            alert("Audio Engine Error: Ensure your API key is correct. Note: Audio requires a user gesture; if this is your first click, try again.");
+                            alert("Audio Engine Error: Ensure your API key is correctly configured. Note: Audio requires a user gesture; if this is your first interaction, try clicking again.");
                           }
                           setIsPreviewing(false);
                         }} 
@@ -415,7 +421,8 @@ function App() {
                      <div className="flex gap-4">
                         <button onClick={async () => {
                           if (c.audioBuffer) {
-                            await ttsRef.current?.ensureAudioContext();
+                            const ctx = await ttsRef.current?.ensureAudioContext();
+                            if (ctx && ctx.state !== 'running') await ctx.resume();
                             playBuffer(c.audioBuffer);
                           }
                         }} className="flex-1 py-4 bg-gray-50 hover:bg-gray-900 hover:text-white rounded-2xl flex justify-center transition-all active:scale-95 shadow-sm">
