@@ -17,6 +17,8 @@ function App() {
   const [chunks, setChunks] = useState<AudiobookChunk[]>([]);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  
+  // Speed is kept as a string for exact dropdown matching
   const [settings, setSettings] = useState<AudiobookSettings>({
     voice: BOOK_PROFILES[0].defaultVoice,
     speed: 1.0, 
@@ -36,6 +38,7 @@ function App() {
     const book = BOOK_PROFILES.find(b => b.id === bookId);
     if (book) {
       setActiveBook(book);
+      // Keep user speed, only update voice to book default
       setSettings(prev => ({ ...prev, voice: book.defaultVoice }));
     }
   };
@@ -98,10 +101,13 @@ function App() {
     const url = URL.createObjectURL(wavBlob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `Audio_Take_${new Date(chunk.timestamp).getTime()}.wav`;
+    anchor.download = `Take_${new Date(chunk.timestamp).getTime()}.wav`;
     anchor.click();
     URL.revokeObjectURL(url);
   };
+
+  // Helper for matching select values to numbers
+  const speedString = settings.speed === 1 ? "1" : settings.speed.toString();
 
   return (
     <div className="min-h-screen text-[#2c2c2c] flex flex-col transition-colors duration-500" style={{ backgroundColor: activeBook.accentColor }}>
@@ -134,11 +140,14 @@ function App() {
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 flex-1 flex flex-col min-h-[450px]">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-serif italic text-gray-800">Manuscript Script</h2>
-              <span className="text-sm text-gray-400 font-mono">{inputText.length} characters</span>
+              <div className="flex gap-4 items-center">
+                 <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-1 rounded-md font-bold uppercase tracking-tighter">Tip: Use # for Titles & • for Bullets</span>
+                 <span className="text-sm text-gray-400 font-mono">{inputText.length} chars</span>
+              </div>
             </div>
             <textarea
-              className="flex-1 w-full bg-transparent resize-none focus:outline-none text-xl leading-relaxed placeholder:italic placeholder:text-gray-300 font-serif"
-              placeholder="Paste the text you want narrated here..."
+              className="flex-1 w-full bg-transparent resize-none focus:outline-none text-xl leading-relaxed placeholder:italic placeholder:text-gray-200 font-serif"
+              placeholder={`Example structural markers:\n\n# Chapter One: The Beginning\n## An Introduction to Solitude\n\n• The digital age brings noise.\n• Silence is a rare luxury.\n\nRegular paragraphs will have a 2-second pause.`}
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
             />
@@ -162,7 +171,7 @@ function App() {
                     <label className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Speed Multiplier</label>
                     <select 
                         className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-opacity-50 outline-none cursor-pointer"
-                        value={settings.speed.toString()}
+                        value={speedString}
                         onChange={(e) => {
                           const val = parseFloat(e.target.value);
                           setSettings(prev => ({...prev, speed: val}));
@@ -196,14 +205,14 @@ function App() {
         {/* Chunks Sidebar */}
         <aside className="w-full lg:w-[450px] p-6 lg:border-l border-gray-200 flex flex-col gap-4 bg-white/50 backdrop-blur-md">
           <div className="flex items-center justify-between">
-            <h3 className="font-bold text-gray-500 uppercase tracking-widest text-xs tracking-tighter">Generated Master Takes</h3>
+            <h3 className="font-bold text-gray-500 uppercase tracking-widest text-xs tracking-tighter">Master Takes</h3>
             <span className="bg-gray-200 text-gray-600 text-[10px] px-2 py-1 rounded-full font-bold uppercase">{chunks.length} Saved</span>
           </div>
           
           <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-4 custom-scrollbar">
             {chunks.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-24 text-gray-400 opacity-40 border-2 border-dashed border-gray-300 rounded-3xl">
-                <p className="text-sm italic">Generate audio to see takes here.</p>
+              <div className="flex flex-col items-center justify-center py-24 text-gray-400 opacity-40 border-2 border-dashed border-gray-300 rounded-3xl text-center px-6">
+                <p className="text-sm italic">Generate high-fidelity audio takes to build your audiobook project here.</p>
               </div>
             ) : (
               chunks.map((chunk) => (
@@ -256,10 +265,10 @@ function App() {
       </main>
 
       <footer className="bg-white border-t border-gray-200 px-6 py-6 flex justify-between items-center text-gray-400">
-        <p className="text-[11px] font-bold uppercase tracking-wide">
-          Kev Sia Text to Speech Audio Generator
+        <p className="text-[11px] font-bold uppercase tracking-wide leading-tight">
+          Kev Sia Text to Speech Audio Generator from '' Solitude In The Digital Age Project''
         </p>
-        <p className="text-[11px] font-bold text-gray-300 uppercase">WAV High-Fidelity Export Enabled</p>
+        <p className="text-[11px] font-bold text-gray-300 uppercase shrink-0 ml-4">WAV Export Enabled</p>
       </footer>
     </div>
   );

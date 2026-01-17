@@ -13,13 +13,19 @@ export class TTSService {
   }
 
   async synthesize(text: string, voice: VoiceName, speed: number, styleDescription: string): Promise<AudioBuffer> {
+    // Enhanced prompt to handle structure
     const prompt = `Act as a professional audiobook narrator. 
     Vocal Style Profile: ${styleDescription}
     Reading Speed: ${speed}x.
-    CRITICAL INSTRUCTION: Insert a clear 2-second pause between every paragraph. 
-    DO NOT say 'Chapter X' or any metadata unless it is explicitly in the text below.
+
+    STRUCTURAL RULES:
+    1. Text starting with '#' is a Main Title. Read it with authoritative, resonant emphasis and pause for 2.5 seconds after.
+    2. Text starting with '##' is a Subtitle. Read it clearly and slightly slower than normal, and pause for 2 seconds after.
+    3. Lines starting with bullet points (•, *, -) should be read as a list. Use a list-cadence and pause for 1.2 seconds between each point.
+    4. For all other paragraphs, maintain a clear 2-second pause between them.
+    5. DO NOT say 'Chapter X', '#' or 'bullet' symbols. Use the symbols only as cues for your vocal performance.
     
-    Text to read: 
+    Text to narrate: 
     ${text}`;
 
     const response = await this.ai.models.generateContent({
