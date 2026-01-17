@@ -13,15 +13,18 @@ export class TTSService {
 
   /**
    * Initializes or resumes the AudioContext. 
-   * Must be called inside a user-triggered event handler (onClick).
+   * CRITICAL: Must be called at the very start of a user-triggered event.
    */
   async ensureAudioContext(): Promise<AudioContext> {
     if (!this.audioContext) {
       this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
     }
-    if (this.audioContext.state === 'suspended') {
+    
+    // Always attempt to resume as some browsers re-suspend it
+    if (this.audioContext.state !== 'running') {
       await this.audioContext.resume();
     }
+    
     return this.audioContext;
   }
 

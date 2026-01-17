@@ -76,7 +76,7 @@ function App() {
 
     setIsSynthesizing(true);
     try {
-      // AudioContext must be resumed inside the user event handler
+      // CRITICAL: AudioContext must be resumed at the very top level of the user event
       await ttsRef.current.ensureAudioContext();
       
       const buffer = await ttsRef.current.synthesize(
@@ -132,7 +132,9 @@ function App() {
   const playBuffer = async (buffer: AudioBuffer) => {
     if (!ttsRef.current) return;
     const ctx = await ttsRef.current.ensureAudioContext(); 
-    if (sourceRef.current) sourceRef.current.stop();
+    if (sourceRef.current) {
+      try { sourceRef.current.stop(); } catch(e) {}
+    }
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     source.connect(ctx.destination);
@@ -276,15 +278,24 @@ function App() {
           {showSpecs && (
             <div className="bg-white p-8 md:p-12 rounded-[48px] border-2 border-dashed border-gray-200 animate-in slide-in-from-top-10 duration-1000 shadow-sm relative overflow-hidden group">
                <div className="absolute top-0 left-0 w-2 h-full bg-amber-500"></div>
-               <h2 className="text-sm font-black uppercase tracking-[.5em] mb-8 flex items-center gap-4 text-gray-900">Studio Onboarding</h2>
+               <h2 className="text-sm font-black uppercase tracking-[.5em] mb-8 flex items-center gap-4 text-gray-900">
+                 <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div> Studio Onboarding
+               </h2>
                <div className="grid md:grid-cols-2 gap-12 text-[13px] leading-relaxed text-gray-500">
                   <div className="space-y-5">
-                    <p className="font-black text-gray-900 uppercase text-[11px] tracking-widest">Universal Production</p>
-                    <p>Kev Sila Studio is a specialized workstation built for high-stakes narration. While it excels at book production, it is designed for any script requiring nuance and professional cadence.</p>
+                    <p className="font-black text-gray-900 uppercase text-[11px] tracking-widest">Universal Production Suite</p>
+                    <p>Welcome to the Kev Sila TTS Studio—a professional-grade workstation that transforms written scripts into high-fidelity audio. Whether you are generating technical docs or soulful audiobooks, our studio adapts to your vision.</p>
+                    <p className="font-black text-gray-900 uppercase text-[11px] tracking-widest pt-4">Multi-Platform Ecosystem</p>
+                    <p>Seamlessly switch between <strong>Gemini</strong> for bulk recording, <strong>ElevenLabs</strong> for premium emotional depth, and <strong>Vault</strong> for analytical summaries. Each engine is tuned for accuracy and speed.</p>
                   </div>
                   <div className="space-y-5">
                     <p className="font-black text-gray-900 uppercase text-[11px] tracking-widest">Workflow Mastery</p>
-                    <p>Harness the speed of <strong>Gemini</strong>, the emotional depth of <strong>ElevenLabs</strong>, or the structure of <strong>NotebookLM</strong>—all within a single unified workspace.</p>
+                    <ol className="list-decimal list-inside space-y-3">
+                      <li>Select your <strong>Book/Project Profile</strong> for stylistic consistency.</li>
+                      <li>Use the <strong>Script Performance Guide</strong> to insert pauses and vocal shifts using custom markdown symbols.</li>
+                      <li>Monitor the <strong>Batch Health</strong> meter to ensure segments stay under the optimal 2,000-word limit for maximum AI stability.</li>
+                    </ol>
+                    <p className="text-[11px] italic mt-4 border-t border-gray-50 pt-4">"If the audio fails to play in your browser, ensure you have clicked anywhere on the interface to 'wake' the studio's audio engine."</p>
                   </div>
                </div>
             </div>
@@ -334,13 +345,14 @@ function App() {
                           if (!ttsRef.current) return;
                           setIsPreviewing(true);
                           try {
-                            // First ensure context is active inside user gesture
+                            // CRITICAL: AudioContext MUST be resumed/initialized inside the event handler stack
                             await ttsRef.current.ensureAudioContext();
+                            
                             const b = await ttsRef.current.previewVoice(settings.voice);
                             if(b) await playBuffer(b);
                           } catch(e) { 
                             console.error(e);
-                            alert("Audio Engine Error: Make sure your API key is configured correctly and you've interacted with the page.");
+                            alert("Audio Engine Error: Ensure your API key is correct. Note: Audio requires a user gesture; if this is your first click, try again.");
                           }
                           setIsPreviewing(false);
                         }} 
@@ -401,7 +413,12 @@ function App() {
                        <span>{c.duration.toFixed(1)}s</span>
                      </div>
                      <div className="flex gap-4">
-                        <button onClick={() => c.audioBuffer && playBuffer(c.audioBuffer)} className="flex-1 py-4 bg-gray-50 hover:bg-gray-900 hover:text-white rounded-2xl flex justify-center transition-all active:scale-95 shadow-sm">
+                        <button onClick={async () => {
+                          if (c.audioBuffer) {
+                            await ttsRef.current?.ensureAudioContext();
+                            playBuffer(c.audioBuffer);
+                          }
+                        }} className="flex-1 py-4 bg-gray-50 hover:bg-gray-900 hover:text-white rounded-2xl flex justify-center transition-all active:scale-95 shadow-sm">
                            <PlayIcon />
                         </button>
                         <button onClick={() => handleDownload(c)} className="p-4 bg-gray-50 hover:bg-amber-600 hover:text-white rounded-2xl text-gray-400 transition-all active:scale-95 shadow-sm">
