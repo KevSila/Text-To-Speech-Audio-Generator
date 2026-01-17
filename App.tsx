@@ -19,7 +19,7 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [settings, setSettings] = useState<AudiobookSettings>({
     voice: BOOK_PROFILES[0].defaultVoice,
-    speed: 1.0, // Defaulting to normal speed
+    speed: 1.0, 
     paragraphPause: 2.0
   });
 
@@ -36,7 +36,6 @@ function App() {
     const book = BOOK_PROFILES.find(b => b.id === bookId);
     if (book) {
       setActiveBook(book);
-      // We update the voice to match the book theme, but we keep the user's selected speed
       setSettings(prev => ({ ...prev, voice: book.defaultVoice }));
     }
   };
@@ -171,7 +170,7 @@ function App() {
                     >
                         <option value="0.8">0.8x (Very Slow)</option>
                         <option value="0.95">0.95x (Reflective)</option>
-                        <option value="1.0">1.0x (Normal)</option>
+                        <option value="1">1.0x (Normal)</option>
                         <option value="1.2">1.2x (Conversational)</option>
                         <option value="1.5">1.5x (Fast Pace)</option>
                     </select>
@@ -258,7 +257,7 @@ function App() {
 
       <footer className="bg-white border-t border-gray-200 px-6 py-6 flex justify-between items-center text-gray-400">
         <p className="text-[11px] font-bold uppercase tracking-wide">
-          Kev Sila Text to Speech Audio Generator
+          Kev Sia Text to Speech Audio Generator
         </p>
         <p className="text-[11px] font-bold text-gray-300 uppercase">WAV High-Fidelity Export Enabled</p>
       </footer>
