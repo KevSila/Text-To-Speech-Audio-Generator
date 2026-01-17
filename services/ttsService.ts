@@ -12,19 +12,23 @@ export class TTSService {
     this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
   }
 
-  /**
-   * Generates a short 3-5 second preview for a specific voice.
-   */
   async previewVoice(voice: VoiceName): Promise<AudioBuffer> {
-    const previewTexts: Record<VoiceName, string> = {
-      [VoiceName.CHARON]: "Greetings. I am Charon. My voice carries the weight of time and the warmth of an old fire.",
-      [VoiceName.ZEPHYR]: "Hello. I am Zephyr. I provide a calm, reflective, and professional narration for your digital journey.",
-      [VoiceName.KORE]: "Welcome. I am Kore. My delivery is precise, professional, and clear, perfect for modern manuscripts.",
-      [VoiceName.FENRIR]: "I am Fenrir. My voice is rich, deep, and steady, bringing authority to every sentence I speak.",
-      [VoiceName.PUCK]: "Hi there! I'm Puck. I bring a light, energetic, and engaging tone to any story I tell."
+    const previewTexts: Record<string, string> = {
+      [VoiceName.CHARON]: "Greetings. I am Charon. My voice carries the weight of time.",
+      [VoiceName.ZEPHYR]: "Hello. I am Zephyr. I provide professional narration for Solitude.",
+      [VoiceName.KORE]: "I am Kore. Precise and modern, ideal for structural manuscripts.",
+      [VoiceName.FENRIR]: "I am Fenrir. Deep and steady for authoritative storytelling.",
+      [VoiceName.PUCK]: "Hi! I'm Puck. Light and engaging for energetic scripts.",
+      [VoiceName.ADAM]: "Adam here. Rich and narrative (ElevenLabs Profile).",
+      [VoiceName.BELLA]: "Bella here. Soft and emotional (ElevenLabs Profile).",
+      [VoiceName.RACHEL]: "Rachel here. Professional and crisp (ElevenLabs Profile).",
+      [VoiceName.JOSH]: "Josh here. Deeply narrative (ElevenLabs Profile).",
+      [VoiceName.NOTEBOOK_V1]: "NotebookLM voice ready for summary analysis."
     };
 
-    const prompt = `Act as a professional narrator. Read the following introduction clearly: "${previewTexts[voice]}"`;
+    const targetVoice = this.mapToNativeVoice(voice);
+    const text = previewTexts[voice] || "Vocal sample ready.";
+    const prompt = `Act as a professional narrator. Read clearly: "${text}"`;
 
     const response = await this.ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
@@ -33,32 +37,47 @@ export class TTSService {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
           voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: voice },
+            prebuiltVoiceConfig: { voiceName: targetVoice },
           },
         },
       },
     });
 
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (!base64Audio) throw new Error("No preview audio content received.");
+    if (!base64Audio) throw new Error("No preview audio.");
 
-    const audioBytes = decodeBase64(base64Audio);
-    return await decodeAudioData(audioBytes, this.audioContext, 24000, 1);
+    return await decodeAudioData(decodeBase64(base64Audio), this.audioContext, 24000, 1);
+  }
+
+  private mapToNativeVoice(voice: VoiceName): string {
+    const native = [VoiceName.CHARON, VoiceName.ZEPHYR, VoiceName.KORE, VoiceName.FENRIR, VoiceName.PUCK];
+    if (native.includes(voice)) return voice;
+    if (voice === VoiceName.ADAM || voice === VoiceName.JOSH) return VoiceName.FENRIR;
+    if (voice === VoiceName.BELLA || voice === VoiceName.RACHEL) return VoiceName.KORE;
+    return VoiceName.ZEPHYR;
   }
 
   async synthesize(text: string, voice: VoiceName, speed: number, styleDescription: string): Promise<AudioBuffer> {
-    const prompt = `Act as a professional audiobook narrator. 
-    Vocal Style Profile: ${styleDescription}
-    Reading Speed: ${speed}x.
-
-    STRUCTURAL RULES:
-    1. Text starting with '#' is a Main Title. Read it with authoritative, resonant emphasis and pause for 2.5 seconds after.
-    2. Text starting with '##' is a Subtitle. Read it clearly and slightly slower than normal, and pause for 2 seconds after.
-    3. Lines starting with bullet points (•, *, -) should be read as a list. Use a list-cadence and pause for 1.2 seconds between each point.
-    4. For all other paragraphs, maintain a clear 2-second pause between them.
-    5. DO NOT say 'Chapter X', '#' or 'bullet' symbols. Use the symbols only as cues for your vocal performance.
+    const targetVoice = this.mapToNativeVoice(voice);
+    // Ensure speed is passed correctly to the prompt
+    const speedStr = speed.toFixed(2);
     
-    Text to narrate: 
+    const prompt = `Act as a world-class professional audiobook narrator. 
+    Vocal Persona: ${styleDescription}
+    Reading Speed: ${speedStr}x.
+
+    STRUCTURAL PERFORMANCE CUES (IMPORTANT):
+    - '#' (BOOK TITLE): Maximum resonance, authoritative focus. 3s pause after.
+    - '##' (SUBTITLE): Grounded, steady emphasis. 2.5s pause after.
+    - '###' (CHAPTER TITLE/SECTION): Clear energetic shift. 2s pause after.
+    - '####' (SUB-SECTION): Precise and narrative. 1.5s pause after.
+    - '>' (REFLECTIVE PROMPT): Slower, ethereal, questioning tone. 3s pause after.
+    - '[WISDOM CARD]': Warm, revered, storytelling cadence. 2s pause after.
+    - '•', '*', '-' (BULLET POINTS): Rhythmic list cadence. 1.2s gap between.
+    
+    PERFORMANCE RULE: Use these markers to adjust your voice, but NEVER speak the symbols themselves.
+    
+    MANUSCRIPT: 
     ${text}`;
 
     const response = await this.ai.models.generateContent({
@@ -68,19 +87,16 @@ export class TTSService {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
           voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: voice },
+            prebuiltVoiceConfig: { voiceName: targetVoice },
           },
         },
       },
     });
 
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (!base64Audio) {
-      throw new Error("No audio content received from Gemini.");
-    }
+    if (!base64Audio) throw new Error("Synthesis failed.");
 
-    const audioBytes = decodeBase64(base64Audio);
-    return await decodeAudioData(audioBytes, this.audioContext, 24000, 1);
+    return await decodeAudioData(decodeBase64(base64Audio), this.audioContext, 24000, 1);
   }
 
   getAudioContext() {
