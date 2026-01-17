@@ -12,8 +12,41 @@ export class TTSService {
     this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
   }
 
+  /**
+   * Generates a short 3-5 second preview for a specific voice.
+   */
+  async previewVoice(voice: VoiceName): Promise<AudioBuffer> {
+    const previewTexts: Record<VoiceName, string> = {
+      [VoiceName.CHARON]: "Greetings. I am Charon. My voice carries the weight of time and the warmth of an old fire.",
+      [VoiceName.ZEPHYR]: "Hello. I am Zephyr. I provide a calm, reflective, and professional narration for your digital journey.",
+      [VoiceName.KORE]: "Welcome. I am Kore. My delivery is precise, professional, and clear, perfect for modern manuscripts.",
+      [VoiceName.FENRIR]: "I am Fenrir. My voice is rich, deep, and steady, bringing authority to every sentence I speak.",
+      [VoiceName.PUCK]: "Hi there! I'm Puck. I bring a light, energetic, and engaging tone to any story I tell."
+    };
+
+    const prompt = `Act as a professional narrator. Read the following introduction clearly: "${previewTexts[voice]}"`;
+
+    const response = await this.ai.models.generateContent({
+      model: "gemini-2.5-flash-preview-tts",
+      contents: [{ parts: [{ text: prompt }] }],
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: voice },
+          },
+        },
+      },
+    });
+
+    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    if (!base64Audio) throw new Error("No preview audio content received.");
+
+    const audioBytes = decodeBase64(base64Audio);
+    return await decodeAudioData(audioBytes, this.audioContext, 24000, 1);
+  }
+
   async synthesize(text: string, voice: VoiceName, speed: number, styleDescription: string): Promise<AudioBuffer> {
-    // Enhanced prompt to handle structure
     const prompt = `Act as a professional audiobook narrator. 
     Vocal Style Profile: ${styleDescription}
     Reading Speed: ${speed}x.
