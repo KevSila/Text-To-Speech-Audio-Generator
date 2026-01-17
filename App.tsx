@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { TTSService } from './services/ttsService';
 import { VoiceName, AudiobookChunk, AudiobookSettings, BOOK_PROFILES, BookProfile } from './types';
 import { audioBufferToWav } from './utils/audioUtils';
@@ -13,9 +13,12 @@ const BookIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height
 const InfoIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>;
 const VolumeIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>;
 const ActivityIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>;
+const ShieldIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>;
 
 // Constant for Free Tier Limits
 const DAILY_REQUEST_LIMIT = 1500; 
+const SAFE_BATCH_WORDS = 1800;
+const MAX_BATCH_WORDS = 2200;
 
 function App() {
   const [activeBook, setActiveBook] = useState<BookProfile>(BOOK_PROFILES[0]);
@@ -41,6 +44,24 @@ function App() {
 
   const ttsRef = useRef<TTSService | null>(null);
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
+
+  // Memoized word count for the current batch
+  const currentWordCount = useMemo(() => {
+    return inputText.trim() === '' ? 0 : inputText.trim().split(/\s+/).length;
+  }, [inputText]);
+
+  // Determine safety level color
+  const getSafetyColor = () => {
+    if (currentWordCount <= SAFE_BATCH_WORDS) return 'bg-green-500';
+    if (currentWordCount <= MAX_BATCH_WORDS) return 'bg-yellow-500';
+    return 'bg-red-500';
+  };
+
+  const getSafetyText = () => {
+    if (currentWordCount <= SAFE_BATCH_WORDS) return 'Optimal Batch Size';
+    if (currentWordCount <= MAX_BATCH_WORDS) return 'Nearing AI Cut-off';
+    return 'Batch Too Large - AI May Stop Early';
+  };
 
   // Persistence and reset logic for usage
   useEffect(() => {
@@ -87,7 +108,7 @@ function App() {
     try {
       const buffer = await ttsRef.current.previewVoice(settings.voice);
       playBuffer(buffer);
-      updateUsage(15); // Avg words in preview
+      updateUsage(15); 
     } catch (err) {
       console.error("Preview failed:", err);
     } finally {
@@ -103,8 +124,6 @@ function App() {
     }
     
     setIsSynthesizing(true);
-    const wordCount = inputText.split(/\s+/).length;
-    
     try {
       const buffer = await ttsRef.current.synthesize(
         inputText, 
@@ -123,7 +142,7 @@ function App() {
 
       setChunks(prev => [newChunk, ...prev]);
       setInputText('');
-      updateUsage(wordCount);
+      updateUsage(currentWordCount);
     } catch (err) {
       console.error(err);
       alert("Error synthesizing speech. Ensure your API Key is valid.");
@@ -217,11 +236,11 @@ function App() {
               <div className="grid md:grid-cols-2 gap-6 text-xs text-gray-600 leading-relaxed">
                 <div>
                   <p className="font-bold text-gray-800 mb-1">Neural Synthesis Engine</p>
-                  <p>This studio uses **Gemini 2.5 Flash Native Audio**, a generative multimodal AI. It doesn't just synthesize text; it predicts human-like inflection based on linguistic context.</p>
+                  <p>This studio uses **Gemini 2.5 Flash Native Audio**. It sends requests via the Google GenAI SDK. Each "Start Narrating" click represents 1 daily request.</p>
                 </div>
                 <div>
-                  <p className="font-bold text-gray-800 mb-1">Structural Interpretation</p>
-                  <p>Markdown markers (#, ##, •) are parsed and converted into *Vocal Directives* that tell the AI exactly when to pause and how to change its pitch and authority.</p>
+                  <p className="font-bold text-gray-800 mb-1">Capacity & Word Counts</p>
+                  <p>You have **1,500 requests per day**. At the recommended **2,000 words per request**, you can process up to **3 million words daily**. The limit resets every 24 hours.</p>
                 </div>
               </div>
             </div>
@@ -231,16 +250,42 @@ function App() {
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-serif italic text-gray-800">Manuscript Script</h2>
               <div className="flex gap-4 items-center">
-                 <span className="text-sm text-gray-400 font-mono">{inputText.length} characters</span>
+                 <div className="flex flex-col items-end">
+                    <div className="flex gap-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                       <span>{inputText.length.toLocaleString()} chars</span>
+                       <span>|</span>
+                       <span className={currentWordCount > MAX_BATCH_WORDS ? 'text-red-500 animate-pulse' : ''}>{currentWordCount.toLocaleString()} words</span>
+                    </div>
+                 </div>
               </div>
             </div>
             <textarea
               className="flex-1 w-full bg-transparent resize-none focus:outline-none text-xl leading-relaxed placeholder:italic placeholder:text-gray-200 font-serif"
-              placeholder={`Write your script here using structural markers for professional results...`}
+              placeholder={`Write your script here... Aim for ~1,500 words per take for best quality.`}
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
             />
             
+            {/* Batch Safety Gauge */}
+            <div className="mt-4 bg-gray-50 rounded-xl p-3 border border-gray-100">
+               <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                     <ShieldIcon />
+                     <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Batch Safety Meter</span>
+                  </div>
+                  <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full text-white ${getSafetyColor()}`}>
+                     {getSafetyText()}
+                  </span>
+               </div>
+               <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full transition-all duration-300 ${getSafetyColor()}`} 
+                    style={{ width: `${Math.min((currentWordCount / MAX_BATCH_WORDS) * 100, 100)}%` }}
+                  />
+               </div>
+               <p className="text-[9px] text-gray-400 mt-2 italic font-medium">To avoid AI cut-offs, stay within the green zone (~1,800 words max).</p>
+            </div>
+
             <div className="mt-6 flex flex-wrap items-center justify-between gap-6 border-t border-gray-100 pt-6">
               <div className="flex flex-wrap gap-6">
                  <div className="flex flex-col gap-1">
@@ -311,13 +356,13 @@ function App() {
                <h3 className="font-bold text-gray-700 uppercase tracking-widest text-[10px] flex items-center gap-2">
                  <ActivityIcon /> Studio Health & Quota
                </h3>
-               <span className="text-[9px] text-gray-400 font-bold uppercase">Daily Free Tier</span>
+               <span className="text-[9px] text-gray-400 font-bold uppercase">Daily Refresh</span>
             </div>
             <div className="space-y-4">
               <div>
                 <div className="flex justify-between text-[10px] font-bold text-gray-500 mb-1 uppercase tracking-tighter">
-                  <span>Daily Capacity</span>
-                  <span>{usage.requestsToday} / {DAILY_REQUEST_LIMIT} req</span>
+                  <span>Daily Requests Used</span>
+                  <span>{usage.requestsToday} / {DAILY_REQUEST_LIMIT}</span>
                 </div>
                 <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
                   <div 
@@ -330,8 +375,8 @@ function App() {
                 </div>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[10px] text-gray-400 font-bold uppercase">Estimated Tokens</span>
-                <span className="text-[10px] font-mono text-gray-700">~{Math.round(usage.wordsProcessed * 1.3).toLocaleString()} used</span>
+                <span className="text-[10px] text-gray-400 font-bold uppercase">Total Words Generated</span>
+                <span className="text-[10px] font-mono text-gray-700">{usage.wordsProcessed.toLocaleString()} words</span>
               </div>
             </div>
           </div>
@@ -431,7 +476,9 @@ function App() {
         <p className="text-[11px] font-bold uppercase tracking-wide leading-tight">
           Kev Sila Text to Speech Audio Generator from '' Solitude In The Digital Age Project''
         </p>
-        <p className="text-[11px] font-bold text-gray-300 uppercase shrink-0 ml-4">WAV Export Enabled</p>
+        <div className="flex items-center gap-4 shrink-0 ml-4">
+           <p className="text-[11px] font-bold text-gray-300 uppercase">WAV High-Fidelity Export</p>
+        </div>
       </footer>
     </div>
   );
