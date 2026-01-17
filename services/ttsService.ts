@@ -5,24 +5,28 @@ import { decodeBase64, decodeAudioData } from "../utils/audioUtils";
 
 export class TTSService {
   private ai: any;
-  private audioContext: AudioContext;
+  private audioContext: AudioContext | null = null;
 
   constructor(apiKey: string) {
     this.ai = new GoogleGenAI({ apiKey });
-    this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
   }
 
   /**
-   * Resumes the AudioContext. Browsers often suspend it until a user gesture.
+   * Initializes or resumes the AudioContext. 
+   * Must be called inside a user-triggered event handler (onClick).
    */
-  async ensureAudioContext() {
+  async ensureAudioContext(): Promise<AudioContext> {
+    if (!this.audioContext) {
+      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+    }
     if (this.audioContext.state === 'suspended') {
       await this.audioContext.resume();
     }
+    return this.audioContext;
   }
 
   async previewVoice(voice: VoiceName): Promise<AudioBuffer> {
-    await this.ensureAudioContext();
+    const ctx = await this.ensureAudioContext();
     const previewTexts: Record<string, string> = {
       [VoiceName.CHARON]: "Greetings. I am Charon. My voice carries the weight of time.",
       [VoiceName.ZEPHYR]: "Hello. I am Zephyr. I provide professional narration for Solitude.",
@@ -54,9 +58,9 @@ export class TTSService {
     });
 
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (!base64Audio) throw new Error("No preview audio.");
+    if (!base64Audio) throw new Error("No preview audio returned from API.");
 
-    return await decodeAudioData(decodeBase64(base64Audio), this.audioContext, 24000, 1);
+    return await decodeAudioData(decodeBase64(base64Audio), ctx, 24000, 1);
   }
 
   private mapToNativeVoice(voice: VoiceName): string {
@@ -68,7 +72,7 @@ export class TTSService {
   }
 
   async synthesize(text: string, voice: VoiceName, speed: number, styleDescription: string): Promise<AudioBuffer> {
-    await this.ensureAudioContext();
+    const ctx = await this.ensureAudioContext();
     const targetVoice = this.mapToNativeVoice(voice);
     const speedStr = speed.toFixed(2);
     
@@ -104,9 +108,9 @@ export class TTSService {
     });
 
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (!base64Audio) throw new Error("Synthesis failed.");
+    if (!base64Audio) throw new Error("Synthesis failed. No audio data.");
 
-    return await decodeAudioData(decodeBase64(base64Audio), this.audioContext, 24000, 1);
+    return await decodeAudioData(decodeBase64(base64Audio), ctx, 24000, 1);
   }
 
   getAudioContext() {

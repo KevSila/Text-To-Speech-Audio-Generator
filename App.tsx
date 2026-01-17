@@ -9,7 +9,6 @@ const PlayIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height
 const DownloadIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
 const TrashIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>;
 const VolumeIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>;
-const ShieldIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>;
 const SettingsIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1-2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>;
 const ActivityIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>;
 const InfoIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>;
@@ -77,6 +76,9 @@ function App() {
 
     setIsSynthesizing(true);
     try {
+      // AudioContext must be resumed inside the user event handler
+      await ttsRef.current.ensureAudioContext();
+      
       const buffer = await ttsRef.current.synthesize(
         inputText, 
         settings.voice, 
@@ -109,7 +111,7 @@ function App() {
       setMetadata(prev => ({ ...prev, part: nextPartNum.toString().padStart(2, '0') }));
     } catch (err) {
       console.error(err);
-      alert("Recording failed. Check your network or API key.");
+      alert("Recording failed. Please ensure your API key is correct and your internet is stable.");
     } finally {
       setIsSynthesizing(false);
     }
@@ -121,10 +123,7 @@ function App() {
     const url = URL.createObjectURL(wavBlob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    
-    // NOMENCLATURE: BOOK NAME_CHAPTER TITLE_PART.wav
     const fileName = `${chunk.metadata.bookTitle.toUpperCase()}_${chunk.metadata.chapterTitle.toUpperCase()}_${chunk.metadata.part}.wav`.replace(/\s+/g, '_');
-    
     anchor.download = fileName;
     anchor.click();
     URL.revokeObjectURL(url);
@@ -132,9 +131,8 @@ function App() {
 
   const playBuffer = async (buffer: AudioBuffer) => {
     if (!ttsRef.current) return;
-    await ttsRef.current.ensureAudioContext(); // Crucial for production/Netlify
+    const ctx = await ttsRef.current.ensureAudioContext(); 
     if (sourceRef.current) sourceRef.current.stop();
-    const ctx = ttsRef.current.getAudioContext();
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     source.connect(ctx.destination);
@@ -152,7 +150,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-[#F5F5F3] text-[#1a1a1a] flex flex-col font-sans overflow-x-hidden selection:bg-amber-100">
-      {/* Navigation Header */}
+      {/* Header */}
       <nav className="bg-white border-b border-gray-200 px-4 md:px-10 py-5 flex flex-col lg:flex-row justify-between items-center gap-6 sticky top-0 z-50 shadow-sm">
         <div className="flex items-center gap-6 w-full lg:w-auto">
           <div className="flex flex-col">
@@ -202,10 +200,8 @@ function App() {
       </nav>
 
       <main className="flex-1 flex flex-col lg:flex-row max-w-[1600px] mx-auto w-full p-4 md:p-8 gap-8">
-        
-        {/* Sidebar Left: Project Tools */}
+        {/* Left Side: Meta & Quota */}
         <aside className="w-full lg:w-80 flex flex-col gap-8 order-2 lg:order-1">
-          {/* Dashboard Meta */}
           <div className="bg-white rounded-[32px] p-7 shadow-sm border border-gray-100">
             <h3 className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-6 flex items-center gap-2">
               <SettingsIcon /> Project Dashboard
@@ -226,7 +222,7 @@ function App() {
                    <div className="group relative">
                       <InfoIcon />
                       <div className="absolute left-full ml-4 -top-12 w-64 bg-gray-900 text-white text-[10px] p-4 rounded-2xl shadow-2xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none z-50 leading-relaxed border border-gray-800">
-                         <strong>Performance Strategy:</strong> AI models perform best when synthesizing under 2,000 words. Split your chapter into "Takes" (Part 01, 02...) for seamless professional assembly later.
+                         <strong>Performance Strategy:</strong> AI models perform best when synthesizing under 2,000 words. Split your chapter into "Takes" (Part 01, 02...) for seamless professional assembly.
                       </div>
                    </div>
                 </div>
@@ -245,7 +241,6 @@ function App() {
             </div>
           </div>
 
-          {/* Script Guide */}
           <div className="bg-white rounded-[32px] p-7 shadow-sm border border-gray-100">
             <h3 className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-6 flex items-center gap-2">
               <ActivityIcon /> Script performance
@@ -265,7 +260,6 @@ function App() {
             </div>
           </div>
           
-          {/* Quota Tracking */}
           <div className="bg-white rounded-[32px] p-7 shadow-sm border border-gray-100 mt-auto">
              <div className="flex justify-between items-center mb-4">
                 <span className="text-[10px] font-black uppercase text-gray-400 tracking-[.2em]">GEMINI CAPACITY TAKES</span>
@@ -277,28 +271,20 @@ function App() {
           </div>
         </aside>
 
-        {/* Center: Editor & Engine */}
+        {/* Center: Main Editor */}
         <section className="flex-1 flex flex-col gap-8 order-1 lg:order-2">
           {showSpecs && (
             <div className="bg-white p-8 md:p-12 rounded-[48px] border-2 border-dashed border-gray-200 animate-in slide-in-from-top-10 duration-1000 shadow-sm relative overflow-hidden group">
                <div className="absolute top-0 left-0 w-2 h-full bg-amber-500"></div>
-               <h2 className="text-sm font-black uppercase tracking-[.5em] mb-8 flex items-center gap-4 text-gray-900">
-                 Welcome to the Master Studio
-               </h2>
+               <h2 className="text-sm font-black uppercase tracking-[.5em] mb-8 flex items-center gap-4 text-gray-900">Studio Onboarding</h2>
                <div className="grid md:grid-cols-2 gap-12 text-[13px] leading-relaxed text-gray-500">
                   <div className="space-y-5">
-                    <p className="font-black text-gray-900 uppercase text-[11px] tracking-widest">A High-Fidelity Ecosystem</p>
-                    <p>Kev Sila Studio is a specialized workstation built for high-stakes narration. While it excels at book production, it is designed for any script requiring nuance, structure, and professional cadence.</p>
-                    <p className="font-black text-gray-900 uppercase text-[11px] tracking-widest pt-4">Cross-Platform Integration</p>
-                    <p>Harness the raw speed of <strong>Gemini</strong>, the peerless emotional depth of <strong>ElevenLabs</strong>, or the analytical structure of <strong>NotebookLM</strong>—all within a single unified workspace.</p>
+                    <p className="font-black text-gray-900 uppercase text-[11px] tracking-widest">Universal Production</p>
+                    <p>Kev Sila Studio is a specialized workstation built for high-stakes narration. While it excels at book production, it is designed for any script requiring nuance and professional cadence.</p>
                   </div>
                   <div className="space-y-5">
-                    <p className="font-black text-gray-900 uppercase text-[11px] tracking-widest">Advanced Functionality</p>
-                    <ul className="space-y-3">
-                      <li className="flex gap-3"><span className="text-amber-500 font-black">01</span><span><strong>Script Logic:</strong> Insert pauses and vocal shifts using custom markdown symbols.</span></li>
-                      <li className="flex gap-3"><span className="text-amber-500 font-black">02</span><span><strong>Take Management:</strong> Download studio-ready WAV files with automated sequential naming.</span></li>
-                      <li className="flex gap-3"><span className="text-amber-500 font-black">03</span><span><strong>Vocal Preview:</strong> Audition voices instantly before committing to a full take.</span></li>
-                    </ul>
+                    <p className="font-black text-gray-900 uppercase text-[11px] tracking-widest">Workflow Mastery</p>
+                    <p>Harness the speed of <strong>Gemini</strong>, the emotional depth of <strong>ElevenLabs</strong>, or the structure of <strong>NotebookLM</strong>—all within a single unified workspace.</p>
                   </div>
                </div>
             </div>
@@ -319,12 +305,11 @@ function App() {
               onChange={e => setInputText(e.target.value)}
             />
 
-            {/* Health Meter */}
             <div className="mt-12 pt-10 border-t border-gray-50">
                <div className="flex justify-between text-[11px] font-black uppercase tracking-widest mb-4">
                  <span>Batch Health Monitoring</span>
                  <span className={currentWordCount > SAFE_BATCH_WORDS ? 'text-amber-600' : 'text-green-500'}>
-                    {currentWordCount > MAX_BATCH_WORDS ? 'Segment Risk Detected' : 'Optimal Take Performance'}
+                    {currentWordCount > MAX_BATCH_WORDS ? 'Segment Risk' : 'Optimal Performance'}
                  </span>
                </div>
                <div className="h-3 w-full bg-gray-50 rounded-full overflow-hidden">
@@ -332,7 +317,6 @@ function App() {
                </div>
             </div>
 
-            {/* Controls */}
             <div className="mt-14 flex flex-wrap items-end justify-between gap-10">
                <div className="flex flex-wrap gap-8 items-end">
                   <div className="flex flex-col gap-3">
@@ -347,11 +331,17 @@ function App() {
                       </select>
                       <button 
                         onClick={async () => {
+                          if (!ttsRef.current) return;
                           setIsPreviewing(true);
                           try {
-                            const b = await ttsRef.current?.previewVoice(settings.voice);
+                            // First ensure context is active inside user gesture
+                            await ttsRef.current.ensureAudioContext();
+                            const b = await ttsRef.current.previewVoice(settings.voice);
                             if(b) await playBuffer(b);
-                          } catch(e) { console.error(e); }
+                          } catch(e) { 
+                            console.error(e);
+                            alert("Audio Engine Error: Make sure your API key is configured correctly and you've interacted with the page.");
+                          }
                           setIsPreviewing(false);
                         }} 
                         disabled={isPreviewing}
@@ -391,7 +381,7 @@ function App() {
           </div>
         </section>
 
-        {/* Right: Master History */}
+        {/* Right Side: Master Session History */}
         <aside className="w-full lg:w-96 flex flex-col gap-8 order-3">
            <div className="flex items-center justify-between">
               <h3 className="text-[11px] font-black uppercase tracking-[.4em] text-gray-400">Master Session</h3>
@@ -428,7 +418,6 @@ function App() {
         </aside>
       </main>
 
-      {/* Footer Refinement */}
       <footer className="bg-white border-t border-gray-200 px-8 md:px-20 py-16 md:py-24 flex flex-col md:flex-row justify-between items-center gap-16 text-center md:text-left">
         <div className="space-y-5">
            <p className="text-[11px] font-black uppercase tracking-[.5em] text-gray-400 leading-none">Designed & Developed by Kevin Sila</p>
@@ -437,10 +426,10 @@ function App() {
         
         <div className="flex flex-col md:flex-row items-center gap-10 md:gap-16">
            <div className="flex gap-8">
-             <a href="mailto:kevinsila1002@GMAIL.COM" title="Contact Developer via Email" className="p-5 rounded-full bg-gray-50 text-gray-400 hover:bg-amber-600 hover:text-white transition-all shadow-sm hover:scale-110">
+             <a href="mailto:kevinsila1002@GMAIL.COM" title="Email Developer" className="p-5 rounded-full bg-gray-50 text-gray-400 hover:bg-amber-600 hover:text-white transition-all shadow-sm hover:scale-110">
                 <MailIcon />
              </a>
-             <a href="https://wa.me/254717578394" target="_blank" rel="noopener noreferrer" title="Contact Developer via WhatsApp" className="p-5 rounded-full bg-gray-50 text-gray-400 hover:bg-green-600 hover:text-white transition-all shadow-sm hover:scale-110">
+             <a href="https://wa.me/254717578394" target="_blank" rel="noopener noreferrer" title="WhatsApp Developer" className="p-5 rounded-full bg-gray-50 text-gray-400 hover:bg-green-600 hover:text-white transition-all shadow-sm hover:scale-110">
                 <WhatsAppIcon />
              </a>
            </div>
@@ -452,7 +441,7 @@ function App() {
         <div className="fixed bottom-10 right-10 bg-gray-900 text-white p-6 rounded-[32px] flex items-center gap-10 shadow-2xl z-[100] animate-in slide-in-from-bottom-10 duration-500">
            <div className="flex items-center gap-5">
              <div className="w-3 h-3 bg-amber-500 rounded-full animate-pulse shadow-[0_0_15px_#f59e0b]"></div>
-             <span className="text-[11px] font-black uppercase tracking-[.3em]">Studio Monitoring</span>
+             <span className="text-[11px] font-black uppercase tracking-[.3em]">Monitoring</span>
            </div>
            <button onClick={() => {sourceRef.current?.stop(); setIsPlaying(false);}} className="text-[11px] font-black px-8 py-3 bg-white/10 hover:bg-white/20 rounded-2xl transition-all uppercase tracking-widest">Terminate</button>
         </div>
