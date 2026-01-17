@@ -14,6 +14,7 @@ const ActivityIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" he
 const MailIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>;
 const WhatsAppIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 1 1-7.6-10.4 8.38 8.38 0 0 1 3.8.9L21 4.25z"/></svg>;
 const RefreshIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>;
+const ExternalLinkIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>;
 
 const LIMITS = {
   [Platform.GEMINI]: 1500,
@@ -59,7 +60,7 @@ function App() {
   const currentWordCount = useMemo(() => inputText.trim() === '' ? 0 : inputText.trim().split(/\s+/).length, [inputText]);
 
   useEffect(() => {
-    const savedUsage = localStorage.getItem('studio_usage_v5.0');
+    const savedUsage = localStorage.getItem('studio_usage_v5.3');
     if (savedUsage) {
       const parsed = JSON.parse(savedUsage);
       if (parsed.lastResetDate !== new Date().toLocaleDateString()) {
@@ -70,7 +71,6 @@ function App() {
     }
   }, []);
 
-  // Cooldown interval
   useEffect(() => {
     if (cooldown > 0) {
       const timer = setInterval(() => setCooldown(c => c - 1), 1000);
@@ -86,15 +86,14 @@ function App() {
       lastResetDate: new Date().toLocaleDateString() 
     };
     setUsage(fresh);
-    localStorage.setItem('studio_usage_v5.0', JSON.stringify(fresh));
+    localStorage.setItem('studio_usage_v5.3', JSON.stringify(fresh));
   };
 
   useEffect(() => {
-    if (process.env.API_KEY) {
-      ttsRef.current = new TTSService(process.env.API_KEY);
-      console.log("[Studio] Gemini Engine Initialized with provided API Key.");
-    } else {
-      console.error("[Studio] CRITICAL: API_KEY missing. Check your Netlify environment variables.");
+    const key = process.env.API_KEY;
+    if (key && key !== "undefined" && key !== "") {
+      ttsRef.current = new TTSService(key);
+      console.log("[Studio] Engine initialized.");
     }
   }, []);
 
@@ -107,7 +106,7 @@ function App() {
                          usage.notebookRequests;
 
     if (currentUsage >= currentLimit) {
-      alert(`[Studio Session Full] You have reached the local taking limit for ${platform.replace('_', ' ')}.`);
+      alert(`[Session Full] Daily take limit reached for ${platform.replace('_', ' ')}.`);
       return false;
     }
 
@@ -117,17 +116,20 @@ function App() {
     if (platform === Platform.NOTEBOOK_LM) nextUsage.notebookRequests += 1;
     
     setUsage(nextUsage);
-    localStorage.setItem('studio_usage_v5.0', JSON.stringify(nextUsage));
+    localStorage.setItem('studio_usage_v5.3', JSON.stringify(nextUsage));
     return true;
   };
 
   const handleSynthesize = async () => {
+    if (!process.env.API_KEY || process.env.API_KEY === "undefined") {
+      alert("SETUP REQUIRED: Add your FREE API_KEY to Netlify Site Settings.");
+      return;
+    }
     if (!inputText.trim() || !ttsRef.current) return;
     if (!checkAndIncrementQuota(settings.platform)) return;
 
     setIsSynthesizing(true);
     try {
-      // Vital: Resume AudioContext on every click to bypass autoplay blocks
       await ttsRef.current.ensureAudioContext();
       const buffer = await ttsRef.current.synthesize(
         inputText, 
@@ -154,11 +156,11 @@ function App() {
       const nextPartNum = parseInt(metadata.part) + 1;
       setMetadata(prev => ({ ...prev, part: nextPartNum.toString().padStart(2, '0') }));
     } catch (err: any) {
-      console.error("[Studio] Synthesis Error:", err);
+      console.error("[Studio] Recording Error:", err);
       if (err.message?.includes('quota') || err.status === 429) {
         setCooldown(60);
       } else {
-        alert("Recording Session Error. Please verify your Netlify Environment Variable API_KEY.");
+        alert("Recording Error. Verify your API key in Netlify.");
       }
     } finally {
       setIsSynthesizing(false);
@@ -198,8 +200,58 @@ function App() {
     return 'bg-red-500';
   };
 
+  const isKeyMissing = !process.env.API_KEY || process.env.API_KEY === "undefined" || process.env.API_KEY === "";
+
   return (
     <div className="min-h-screen bg-[#F5F5F3] text-[#1a1a1a] flex flex-col font-sans overflow-x-hidden selection:bg-amber-100">
+      
+      {/* Detailed Setup Wizard Overlay */}
+      {isKeyMissing && (
+        <div className="fixed inset-0 z-[1000] bg-white flex items-center justify-center p-6 md:p-12 overflow-y-auto">
+          <div className="max-w-3xl w-full bg-white rounded-[48px] border-4 border-amber-500 p-8 md:p-16 shadow-2xl relative">
+            <div className="absolute top-8 left-8 w-12 h-12 bg-amber-500 rounded-full flex items-center justify-center text-white font-black text-2xl">!</div>
+            <h2 className="text-3xl md:text-5xl font-black tracking-tighter mb-8 pl-16 uppercase">Studio Setup Required</h2>
+            
+            <div className="space-y-10 text-gray-600 leading-relaxed">
+              <section>
+                <h3 className="text-gray-900 font-black text-lg mb-4 flex items-center gap-2">
+                  <div className="w-6 h-6 bg-gray-900 text-white rounded-full flex items-center justify-center text-xs">1</div>
+                  How to find your FREE Key:
+                </h3>
+                <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100 space-y-4">
+                  <p className="text-sm">Click this link: <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-amber-600 underline font-black inline-flex items-center gap-1">Google AI Studio <ExternalLinkIcon /></a></p>
+                  <ul className="text-[13px] list-disc pl-5 space-y-2">
+                    <li>On the left sidebar, click the <strong>Key icon (Get API key)</strong>.</li>
+                    <li>Click <strong>"Create API key in new project"</strong> (blue button).</li>
+                    <li>Wait 5 seconds, then click <strong>"Copy"</strong> next to the new key.</li>
+                  </ul>
+                </div>
+              </section>
+
+              <section>
+                <h3 className="text-gray-900 font-black text-lg mb-4 flex items-center gap-2">
+                  <div className="w-6 h-6 bg-gray-900 text-white rounded-full flex items-center justify-center text-xs">2</div>
+                  How to activate it on Netlify:
+                </h3>
+                <div className="bg-amber-50/50 p-6 rounded-3xl border border-amber-100 space-y-4">
+                  <ul className="text-[13px] space-y-3">
+                    <li className="flex gap-2"><span>&bull;</span> <span>Open your site dashboard in <strong>Netlify.com</strong></span></li>
+                    <li className="flex gap-2"><span>&bull;</span> <span>Go to <strong>Site configuration</strong> &rarr; <strong>Environment variables</strong></span></li>
+                    <li className="flex gap-2"><span>&bull;</span> <span>Add variable: <strong>Key:</strong> <code className="bg-white px-2 py-0.5 rounded font-black">API_KEY</code> | <strong>Value:</strong> <code className="bg-white px-2 py-0.5 rounded italic opacity-60">Paste your copied key here</code></span></li>
+                    <li className="flex gap-2 font-bold text-amber-900"><span>&bull;</span> <span>Crucial: Go to "Deploys" and click "Clear cache and deploy site".</span></li>
+                  </ul>
+                </div>
+              </section>
+
+              <div className="flex items-center justify-between pt-10 border-t border-gray-100">
+                 <p className="text-[11px] font-black uppercase tracking-widest text-gray-400">Connection: Blocked</p>
+                 <button onClick={() => window.location.reload()} className="bg-gray-900 text-white px-10 py-5 rounded-full font-black uppercase text-[12px] tracking-widest hover:scale-105 transition-all shadow-xl shadow-gray-200">Reload Studio</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <nav className="bg-white border-b border-gray-200 px-4 md:px-10 py-5 flex flex-col lg:flex-row justify-between items-center gap-6 sticky top-0 z-50 shadow-sm">
         <div className="flex items-center gap-6 w-full lg:w-auto">
           <div className="flex flex-col">
@@ -320,25 +372,24 @@ function App() {
                   </div>
                </div>
              ))}
-             <p className="text-[8px] text-gray-400 leading-tight mt-1">Note: Provider daily limits (RPD) reset every 24 hours. Minute limits (RPM) refresh every 60 seconds.</p>
           </div>
         </aside>
 
         <section className="flex-1 flex flex-col gap-8 order-1 lg:order-2">
           {showSpecs && (
-            <div className="bg-white p-8 md:p-12 rounded-[48px] border-2 border-dashed border-gray-200 animate-in slide-in-from-top-10 shadow-sm relative overflow-hidden group">
+            <div className="bg-white p-8 md:p-12 rounded-[48px] border-2 border-dashed border-gray-200 shadow-sm relative overflow-hidden group">
                <div className="absolute top-0 left-0 w-2 h-full bg-amber-500"></div>
                <h2 className="text-sm font-black uppercase tracking-[.5em] mb-8 flex items-center gap-4 text-gray-900">
-                 <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div> Studio Onboarding & Specs
+                 <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div> Production Notes
                </h2>
                <div className="grid md:grid-cols-2 gap-12 text-[13px] leading-relaxed text-gray-500">
                   <div className="space-y-5">
-                    <p className="font-black text-gray-900 uppercase text-[11px] tracking-widest">Universal Production Suite</p>
-                    <p>Welcome to the Kev Sila TTS Studio—a professional-grade workstation designed to transform complex manuscripts into high-fidelity audio.</p>
+                    <p className="font-black text-gray-900 uppercase text-[11px] tracking-widest">Performance Tracking</p>
+                    <p>The Gemini Engine handles complex markdown tags. Use <strong>#</strong> for resonant titles and <strong>></strong> for softer, reflective thoughts in your manuscript.</p>
                   </div>
                   <div className="space-y-5">
-                    <p className="font-black text-gray-900 uppercase text-[11px] tracking-widest">Quota Management</p>
-                    <p>If you encounter a <strong>Minute-Limit block</strong>, a 60-second cooldown will automatically begin. Please wait for the timer to finish to ensure the engine is ready for the next take.</p>
+                    <p className="font-black text-gray-900 uppercase text-[11px] tracking-widest">Rate Limit Awareness</p>
+                    <p>Free Tier users have a <strong>15 Requests Per Minute</strong> limit. If you hit this, the Record button will turn into a cooldown timer.</p>
                   </div>
                </div>
             </div>
@@ -385,6 +436,7 @@ function App() {
                       </select>
                       <button 
                         onClick={async () => {
+                          if (isKeyMissing) { alert("Add your API_KEY to Netlify."); return; }
                           if (!ttsRef.current) return;
                           if (!checkAndIncrementQuota(settings.platform)) return;
 
@@ -398,7 +450,7 @@ function App() {
                             if (err.message?.includes('quota') || err.status === 429) {
                                setCooldown(60);
                             } else {
-                               alert("Preview failed. Verify your Netlify API_KEY settings.");
+                               alert("Preview failed. Verify your Netlify API key.");
                             }
                           }
                           setIsPreviewing(false);
@@ -487,10 +539,10 @@ function App() {
               <p className="text-[13px] font-medium text-gray-400 max-w-sm leading-relaxed serif italic opacity-70">"Technology is the bridge, but the human voice is the destination."</p>
            </div>
            <div className="h-12 w-px bg-gray-100 hidden md:block"></div>
-           <div className="flex flex-col gap-2">
+           <div className="flex flex-col gap-2 text-left">
               <div className="flex items-center gap-2">
-                 <div className={`w-2 h-2 rounded-full ${process.env.API_KEY ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-                 <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{process.env.API_KEY ? 'Engine Active' : 'Key Missing'}</span>
+                 <div className={`w-2 h-2 rounded-full ${!isKeyMissing ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+                 <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{!isKeyMissing ? 'Engine Active' : 'Setup Required'}</span>
               </div>
               <p className="text-[8px] uppercase tracking-widest font-bold text-gray-300">Origin: {window.location.hostname}</p>
            </div>
@@ -505,7 +557,7 @@ function App() {
                 <WhatsAppIcon />
              </a>
            </div>
-           <div className="text-[11px] font-black bg-gray-900 text-white px-8 py-4 rounded-full uppercase tracking-[.2em] shrink-0">High Fidelity Workflow v5.0</div>
+           <div className="text-[11px] font-black bg-gray-900 text-white px-8 py-4 rounded-full uppercase tracking-[.2em] shrink-0">High Fidelity Workflow v5.3</div>
         </div>
       </footer>
 
