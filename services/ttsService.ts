@@ -12,7 +12,17 @@ export class TTSService {
     this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
   }
 
+  /**
+   * Resumes the AudioContext. Browsers often suspend it until a user gesture.
+   */
+  async ensureAudioContext() {
+    if (this.audioContext.state === 'suspended') {
+      await this.audioContext.resume();
+    }
+  }
+
   async previewVoice(voice: VoiceName): Promise<AudioBuffer> {
+    await this.ensureAudioContext();
     const previewTexts: Record<string, string> = {
       [VoiceName.CHARON]: "Greetings. I am Charon. My voice carries the weight of time.",
       [VoiceName.ZEPHYR]: "Hello. I am Zephyr. I provide professional narration for Solitude.",
@@ -58,8 +68,8 @@ export class TTSService {
   }
 
   async synthesize(text: string, voice: VoiceName, speed: number, styleDescription: string): Promise<AudioBuffer> {
+    await this.ensureAudioContext();
     const targetVoice = this.mapToNativeVoice(voice);
-    // Ensure speed is passed correctly to the prompt
     const speedStr = speed.toFixed(2);
     
     const prompt = `Act as a world-class professional audiobook narrator. 
