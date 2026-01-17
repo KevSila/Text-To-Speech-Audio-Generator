@@ -13,7 +13,6 @@ const ActivityIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" he
 const MailIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>;
 const WhatsAppIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 1 1-7.6-10.4 8.38 8.38 0 0 1 3.8.9L21 4.25z"/></svg>;
 const RefreshIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>;
-const ExternalLinkIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>;
 
 const LIMITS = {
   [Platform.GEMINI]: 1500,
@@ -33,7 +32,6 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [showSpecs, setShowSpecs] = useState(true);
   const [cooldown, setCooldown] = useState(0);
-  const [forceBypass, setForceBypass] = useState(false);
   
   const [metadata, setMetadata] = useState({
     chapterTitle: 'Chapter 1',
@@ -59,15 +57,14 @@ function App() {
 
   const currentWordCount = useMemo(() => inputText.trim() === '' ? 0 : inputText.trim().split(/\s+/).length, [inputText]);
 
-  // Simplified Detection: Direct check of environment string
-  const isKeyMissing = useMemo(() => {
-    if (forceBypass) return false;
+  // Visual status only, no blocking
+  const engineReady = useMemo(() => {
     const key = process.env.API_KEY;
-    return !key || key === "" || key === "undefined";
-  }, [forceBypass]);
+    return !!(key && key !== "" && key !== "undefined");
+  }, []);
 
   useEffect(() => {
-    const savedUsage = localStorage.getItem('studio_usage_v5.8');
+    const savedUsage = localStorage.getItem('studio_usage_v5.9');
     if (savedUsage) {
       const parsed = JSON.parse(savedUsage);
       if (parsed.lastResetDate !== new Date().toLocaleDateString()) {
@@ -93,14 +90,14 @@ function App() {
       lastResetDate: new Date().toLocaleDateString() 
     };
     setUsage(fresh);
-    localStorage.setItem('studio_usage_v5.8', JSON.stringify(fresh));
+    localStorage.setItem('studio_usage_v5.9', JSON.stringify(fresh));
   };
 
   useEffect(() => {
     const key = process.env.API_KEY;
     if (key && key !== "undefined" && key !== "") {
       ttsRef.current = new TTSService(key);
-      console.log("[Studio] Engine v5.8 initialized.");
+      console.log("[Studio] Engine v5.9 initialized.");
     }
   }, []);
 
@@ -123,18 +120,17 @@ function App() {
     if (platform === Platform.NOTEBOOK_LM) nextUsage.notebookRequests += 1;
     
     setUsage(nextUsage);
-    localStorage.setItem('studio_usage_v5.8', JSON.stringify(nextUsage));
+    localStorage.setItem('studio_usage_v5.9', JSON.stringify(nextUsage));
     return true;
   };
 
   const handleSynthesize = async () => {
     if (!ttsRef.current) {
-        // Late init attempt if bypass was used
         const key = process.env.API_KEY;
         if (key && key !== "undefined" && key !== "") {
             ttsRef.current = new TTSService(key);
         } else {
-            alert("ENGINE ERROR: API Key missing or rejected by server.");
+            alert("STUDIO ERROR: No API Key found in Netlify. Please check your Site Settings.");
             return;
         }
     }
@@ -174,7 +170,7 @@ function App() {
       if (err.message?.includes('quota') || err.status === 429) {
         setCooldown(60);
       } else {
-        alert("Recording Error. Check your browser console for details.");
+        alert("Synthesis failed. This usually means the API Key is invalid or rate limited.");
       }
     } finally {
       setIsSynthesizing(false);
@@ -217,46 +213,6 @@ function App() {
   return (
     <div className="min-h-screen bg-[#F5F5F3] text-[#1a1a1a] flex flex-col font-sans overflow-x-hidden selection:bg-amber-100">
       
-      {/* Setup Wizard Overlay */}
-      {isKeyMissing && (
-        <div className="fixed inset-0 z-[1000] bg-white flex items-center justify-center p-6 md:p-12 overflow-y-auto">
-          <div className="max-w-3xl w-full bg-white rounded-[48px] border-4 border-amber-500 p-8 md:p-16 shadow-2xl relative">
-            <div className="absolute top-8 left-8 w-12 h-12 bg-amber-500 rounded-full flex items-center justify-center text-white font-black text-2xl">!</div>
-            <h2 className="text-3xl md:text-5xl font-black tracking-tighter mb-8 pl-16 uppercase">Studio Setup Required</h2>
-            
-            <div className="space-y-10 text-gray-600 leading-relaxed">
-              <section>
-                <h3 className="text-gray-900 font-black text-lg mb-4 flex items-center gap-2">
-                  <div className="w-6 h-6 bg-gray-900 text-white rounded-full flex items-center justify-center text-xs">1</div>
-                  Find your FREE Key:
-                </h3>
-                <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100">
-                  <p className="text-sm p-4">Click link: <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-amber-600 underline font-black">Google AI Studio</a>. Copy the key from a project.</p>
-                </div>
-              </section>
-
-              <section>
-                <h3 className="text-gray-900 font-black text-lg mb-4 flex items-center gap-2">
-                  <div className="w-6 h-6 bg-gray-900 text-white rounded-full flex items-center justify-center text-xs">2</div>
-                  Paste in Netlify:
-                </h3>
-                <div className="bg-amber-50/50 p-6 rounded-3xl border border-amber-100">
-                  <p className="text-[13px]">Add variable: <b>API_KEY</b> in Netlify Site Settings. <b>Crucial:</b> Go to "Deploys" and click "Clear cache and deploy site" after adding it.</p>
-                </div>
-              </section>
-
-              <div className="flex flex-col md:flex-row items-center justify-between pt-10 border-t border-gray-100 gap-6">
-                 <div className="text-center md:text-left">
-                    <p className="text-[11px] font-black uppercase tracking-widest text-gray-400">Connection: Blocked (v5.8)</p>
-                    <button onClick={() => setForceBypass(true)} className="text-[10px] text-amber-600 font-black uppercase tracking-widest underline mt-2">I added the key, let me in anyway</button>
-                 </div>
-                 <button onClick={() => window.location.reload()} className="bg-gray-900 text-white px-10 py-5 rounded-full font-black uppercase text-[12px] tracking-widest hover:scale-105 transition-all shadow-xl shadow-gray-200">Reload Studio</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       <nav className="bg-white border-b border-gray-200 px-4 md:px-10 py-5 flex flex-col lg:flex-row justify-between items-center gap-6 sticky top-0 z-50 shadow-sm">
         <div className="flex items-center gap-6 w-full lg:w-auto">
           <div className="flex flex-col">
@@ -425,7 +381,7 @@ function App() {
                             const key = process.env.API_KEY;
                             if (key && key !== "undefined" && key !== "") ttsRef.current = new TTSService(key);
                           }
-                          if (!ttsRef.current) { alert("API KEY NOT DETECTED"); return; }
+                          if (!ttsRef.current) { alert("API KEY NOT DETECTED IN NETLIFY SETTINGS."); return; }
                           if (!checkAndIncrementQuota(settings.platform)) return;
 
                           setIsPreviewing(true);
@@ -434,7 +390,7 @@ function App() {
                             const b = await ttsRef.current.previewVoice(settings.voice);
                             if(b) playBuffer(b);
                           } catch(err: any) { 
-                             alert("Preview failed. Check API Key in Netlify.");
+                             alert("Preview failed. Verify API Key.");
                           }
                           setIsPreviewing(false);
                         }} 
@@ -524,8 +480,8 @@ function App() {
            <div className="h-12 w-px bg-gray-100 hidden md:block"></div>
            <div className="flex flex-col gap-2 text-left">
               <div className="flex items-center gap-2">
-                 <div className={`w-2 h-2 rounded-full ${!isKeyMissing ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-                 <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{!isKeyMissing ? 'Engine Active' : 'Setup Required'}</span>
+                 <div className={`w-2 h-2 rounded-full ${engineReady ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+                 <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{engineReady ? 'Engine Active' : 'Setup Required'}</span>
               </div>
               <p className="text-[8px] uppercase tracking-widest font-bold text-gray-300">Origin: {window.location.hostname}</p>
            </div>
@@ -539,7 +495,7 @@ function App() {
                 <WhatsAppIcon />
              </a>
            </div>
-           <div className="text-[11px] font-black bg-gray-900 text-white px-8 py-4 rounded-full uppercase tracking-[.2em] shrink-0">High Fidelity Workflow v5.8</div>
+           <div className="text-[11px] font-black bg-gray-900 text-white px-8 py-4 rounded-full uppercase tracking-[.2em] shrink-0">High Fidelity Workflow v5.9</div>
         </div>
       </footer>
 
