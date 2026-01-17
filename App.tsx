@@ -58,8 +58,19 @@ function App() {
 
   const currentWordCount = useMemo(() => inputText.trim() === '' ? 0 : inputText.trim().split(/\s+/).length, [inputText]);
 
+  // Robust environment variable check
+  const isKeyMissing = useMemo(() => {
+    try {
+      // Accessing via global check to prevent ReferenceError in strict builds
+      const key = (typeof process !== 'undefined' && process.env) ? process.env.API_KEY : undefined;
+      return !key || key === "undefined" || key === "";
+    } catch (e) {
+      return true;
+    }
+  }, []);
+
   useEffect(() => {
-    const savedUsage = localStorage.getItem('studio_usage_v5.6');
+    const savedUsage = localStorage.getItem('studio_usage_v5.7');
     if (savedUsage) {
       const parsed = JSON.parse(savedUsage);
       if (parsed.lastResetDate !== new Date().toLocaleDateString()) {
@@ -85,14 +96,18 @@ function App() {
       lastResetDate: new Date().toLocaleDateString() 
     };
     setUsage(fresh);
-    localStorage.setItem('studio_usage_v5.6', JSON.stringify(fresh));
+    localStorage.setItem('studio_usage_v5.7', JSON.stringify(fresh));
   };
 
   useEffect(() => {
-    const key = process.env.API_KEY;
-    if (key && key !== "undefined" && key !== "") {
-      ttsRef.current = new TTSService(key);
-      console.log("[Studio] Engine initialized.");
+    try {
+      const key = (typeof process !== 'undefined' && process.env) ? process.env.API_KEY : undefined;
+      if (key && key !== "undefined" && key !== "") {
+        ttsRef.current = new TTSService(key);
+        console.log("[Studio] Engine v5.7 initialized successfully.");
+      }
+    } catch (err) {
+      console.warn("[Studio] Engine init failed:", err);
     }
   }, []);
 
@@ -115,12 +130,13 @@ function App() {
     if (platform === Platform.NOTEBOOK_LM) nextUsage.notebookRequests += 1;
     
     setUsage(nextUsage);
-    localStorage.setItem('studio_usage_v5.6', JSON.stringify(nextUsage));
+    localStorage.setItem('studio_usage_v5.7', JSON.stringify(nextUsage));
     return true;
   };
 
   const handleSynthesize = async () => {
-    if (!process.env.API_KEY || process.env.API_KEY === "undefined") {
+    const key = (typeof process !== 'undefined' && process.env) ? process.env.API_KEY : undefined;
+    if (!key || key === "undefined") {
       alert("SETUP REQUIRED: Add your FREE API_KEY to Netlify Site Settings.");
       return;
     }
@@ -199,8 +215,6 @@ function App() {
     return 'bg-red-500';
   };
 
-  const isKeyMissing = !process.env.API_KEY || process.env.API_KEY === "undefined" || process.env.API_KEY === "";
-
   return (
     <div className="min-h-screen bg-[#F5F5F3] text-[#1a1a1a] flex flex-col font-sans overflow-x-hidden selection:bg-amber-100">
       
@@ -243,7 +257,7 @@ function App() {
               </section>
 
               <div className="flex items-center justify-between pt-10 border-t border-gray-100">
-                 <p className="text-[11px] font-black uppercase tracking-widest text-gray-400">Connection: Blocked</p>
+                 <p className="text-[11px] font-black uppercase tracking-widest text-gray-400">Connection: Blocked (v5.7)</p>
                  <button onClick={() => window.location.reload()} className="bg-gray-900 text-white px-10 py-5 rounded-full font-black uppercase text-[12px] tracking-widest hover:scale-105 transition-all shadow-xl shadow-gray-200">Reload Studio</button>
               </div>
             </div>
@@ -435,7 +449,8 @@ function App() {
                       </select>
                       <button 
                         onClick={async () => {
-                          if (isKeyMissing) { alert("Add your API_KEY to Netlify."); return; }
+                          const key = (typeof process !== 'undefined' && process.env) ? process.env.API_KEY : undefined;
+                          if (!key || key === "undefined") { alert("Add your API_KEY to Netlify."); return; }
                           if (!ttsRef.current) return;
                           if (!checkAndIncrementQuota(settings.platform)) return;
 
@@ -556,7 +571,7 @@ function App() {
                 <WhatsAppIcon />
              </a>
            </div>
-           <div className="text-[11px] font-black bg-gray-900 text-white px-8 py-4 rounded-full uppercase tracking-[.2em] shrink-0">High Fidelity Workflow v5.6</div>
+           <div className="text-[11px] font-black bg-gray-900 text-white px-8 py-4 rounded-full uppercase tracking-[.2em] shrink-0">High Fidelity Workflow v5.7</div>
         </div>
       </footer>
 
