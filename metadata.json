@@ -1,5 +1,8 @@
 {
   "name": "Text to Speech Studio",
-  "description": "High-quality audiobook recording tool with project-specific vocal styles, featuring Gemini 2.5 Flash Native Audio.",
-  "requestFramePermissions": []
+  "description": "Professional audiobook production studio powered by Gemini 3.1 Flash Text-to-Speech, featuring multi-character recording, AI director markup, and master track audio stitching.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

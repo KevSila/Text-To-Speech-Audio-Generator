@@ -92,3 +92,64 @@ export function audioBufferToWav(buffer: AudioBuffer): Blob {
 
   return new Blob([bufferWav], { type: "audio/wav" });
 }
+
+export function stitchAudioBuffers(
+  buffers: AudioBuffer[],
+  ctx: AudioContext,
+  pauseDurationSec: number = 1.0
+): AudioBuffer {
+  if (buffers.length === 0) {
+    return ctx.createBuffer(1, 1, 24000);
+  }
+
+  const sampleRate = buffers[0].sampleRate;
+  const numChannels = buffers[0].numberOfChannels;
+  const pauseSamples = Math.floor(sampleRate * pauseDurationSec);
+
+  let totalSamples = 0;
+  buffers.forEach((b, idx) => {
+    totalSamples += b.length;
+    if (idx < buffers.length - 1) {
+      totalSamples += pauseSamples;
+    }
+  });
+
+  const outputBuffer = ctx.createBuffer(numChannels, totalSamples, sampleRate);
+
+  for (let channel = 0; channel < numChannels; channel++) {
+    const outputData = outputBuffer.getChannelData(channel);
+    let offset = 0;
+
+    buffers.forEach((b, idx) => {
+      const channelData = b.getChannelData(Math.min(channel, b.numberOfChannels - 1));
+      outputData.set(channelData, offset);
+      offset += b.length;
+
+      if (idx < buffers.length - 1) {
+        // Leave pauseSamples as zero (silence)
+        offset += pauseSamples;
+      }
+    });
+  }
+
+  return outputBuffer;
+}
+
+export function getWaveformData(buffer: AudioBuffer, samplesCount: number = 60): number[] {
+  const data = buffer.getChannelData(0);
+  const step = Math.floor(data.length / samplesCount);
+  const peaks: number[] = [];
+
+  for (let i = 0; i < samplesCount; i++) {
+    const start = i * step;
+    let max = 0;
+    for (let j = 0; j < step; j++) {
+      const val = Math.abs(data[start + j] || 0);
+      if (val > max) max = val;
+    }
+    peaks.push(max);
+  }
+
+  return peaks;
+}
+

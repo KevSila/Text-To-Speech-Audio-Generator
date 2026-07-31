@@ -1,4 +1,3 @@
-
 export enum VoiceName {
   // Gemini Native Voices
   CHARON = 'Charon',
@@ -29,6 +28,16 @@ export enum Platform {
   NOTEBOOK_LM = 'NOTEBOOK_LM_VAULT'
 }
 
+export enum RecordingMode {
+  SOLO = 'SOLO_NARRATOR',
+  MULTI_SPEAKER = 'MULTI_SPEAKER'
+}
+
+export interface SpeakerConfig {
+  name: string;
+  voice: VoiceName;
+}
+
 export interface BookProfile {
   id: string;
   title: string;
@@ -48,6 +57,7 @@ export interface AudiobookChunk {
     bookTitle: string;
     chapterTitle: string;
     part: string;
+    mode?: RecordingMode;
   };
 }
 
@@ -56,6 +66,19 @@ export interface AudiobookSettings {
   speed: number;
   paragraphPause: number;
   platform: Platform;
+  mode: RecordingMode;
+  speakers: SpeakerConfig[];
+  masterPauseDuration: number; // pause between stitched takes in seconds
+}
+
+export interface ManuscriptAnalysis {
+  summary?: string;
+  recommendedVoice?: string;
+  recommendedSpeed?: number;
+  pacingAdvice?: string;
+  detectedDialogue?: boolean;
+  dialogueSpeakers?: string[];
+  annotatedManuscript?: string;
 }
 
 export const PLATFORM_VOICES: Record<Platform, VoiceName[]> = {
@@ -101,9 +124,17 @@ export const BOOK_PROFILES: BookProfile[] = [
     narrationStyle: 'Warm, elder-like, and ancestral. A storytelling cadence that feels like wisdom shared around a fire at night.'
   },
   {
+    id: 'podcast',
+    title: 'Studio Podcast / Drama',
+    themeColor: '#4f46e5',
+    accentColor: '#F5F5F3',
+    defaultVoice: VoiceName.PUCK,
+    narrationStyle: 'Energetic, expressive, and conversational. Clear separation between distinct speakers.'
+  },
+  {
     id: 'generic',
-    title: 'Custom Project',
-    themeColor: '#4b5563',
+    title: 'Custom Manuscript',
+    themeColor: '#1f2937',
     accentColor: '#F5F5F3',
     defaultVoice: VoiceName.KORE,
     narrationStyle: 'Neutral, standard narration style suitable for any general text or script.'
